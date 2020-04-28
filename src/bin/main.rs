@@ -83,13 +83,12 @@ fn extract_keyvalue(content: &str) -> Result<KeyValue, String> {
         Value::String(id) => (id, None),
         Value::Object(obj) => {
             let id = obj["id"].to_string().replace("\"", "");
-            let result = if obj.keys().len() == 1 {
+            if obj.keys().len() == 1 {
                 (id, None)
             } else {
                 (id, Some(Value::Object(obj).to_string()))
-            };
-            result
-        },
+            }
+        }
     };
 
     match value {
