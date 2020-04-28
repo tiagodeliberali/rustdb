@@ -1,7 +1,7 @@
 use rustdb::KeyValue;
+use serde_json::Value;
 use std::io::prelude::*;
 use std::net::{TcpListener, TcpStream};
-use serde_json::{Value};
 
 const INSERT_DATA: &[u8; 17] = b"POST / HTTP/1.1\r\n";
 const UPDATE_DATA: &[u8; 16] = b"PUT / HTTP/1.1\r\n";
@@ -30,21 +30,30 @@ fn handle_connection(mut stream: TcpStream) {
         Ok(v) => v,
         Err(err) => {
             println!("[ERROR] Keyvalue parse error: {}", err);
-            return_http(stream, "HTTP/1.1 400 BAD REQUEST\r\n\r\nInvalid json payload");
+            return_http(
+                stream,
+                "HTTP/1.1 400 BAD REQUEST\r\n\r\nInvalid json payload",
+            );
             return;
-        },
+        }
     };
 
     let (response_code, action) = if buffer.starts_with(READ_DATA) {
         ("200 OK", format!("action :READ\nid: {}", key_value.key))
     } else if buffer.starts_with(INSERT_DATA) {
         match key_value.value {
-            Some(value) => ("200 OK", format!("action :INSERT\nid: {}\nvalue: {}", key_value.key, value)),
+            Some(value) => (
+                "200 OK",
+                format!("action :INSERT\nid: {}\nvalue: {}", key_value.key, value),
+            ),
             None => ("400 BAD REQUEST", String::from("Missing value to INSERT")),
         }
     } else if buffer.starts_with(UPDATE_DATA) {
         match key_value.value {
-            Some(value) => ("200 OK", format!("action :UPDATE\nid: {}\nvalue: {}", key_value.key, value)),
+            Some(value) => (
+                "200 OK",
+                format!("action :UPDATE\nid: {}\nvalue: {}", key_value.key, value),
+            ),
             None => ("400 BAD REQUEST", String::from("Missing value to UPDATE")),
         }
     } else if buffer.starts_with(DELETE_DATA) {
