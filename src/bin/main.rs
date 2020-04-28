@@ -72,11 +72,24 @@ fn extract_keyvalue(content: &str) -> Result<KeyValue, String> {
         Err(error) => return Err(format!("{}", error)),
     };
 
-    if v["id"] == Value::Null {
-        return Err(String::from("Missing field 'id'"));
-    }
+    let (key, value) = match v {
+        Value::Null => return Err(String::from("Invalid input: null")),
+        Value::Bool(_) => return Err(String::from("Invalid input: boolean")),
+        Value::Object(obj) if !obj.contains_key("id") => {
+            return Err(String::from("Missing field 'id'"))
+        }
+        Value::Array(_) => return Err(String::from("Invalid input: array")),
+        Value::Number(id) => (id.to_string(), None),
+        Value::String(id) => (id, None),
+        Value::Object(obj) => {
+            (obj["id"].to_string(), Some(Value::Object(obj).to_string()))
+        },
+    };
 
-    return Ok(KeyValue::new(v["id"].to_string(), v.to_string()));
+    match value {
+        Some(v) => Ok(KeyValue::new(key, v)),
+        None => Ok(KeyValue::new_no_value(key)),
+    }
 }
 
 fn return_http(mut stream: TcpStream, response: &str) {
