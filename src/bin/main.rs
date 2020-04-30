@@ -32,7 +32,7 @@ fn handle_connection(mut stream: TcpStream) {
             println!("[ERROR] Keyvalue parse error: {}", err);
             return_http(
                 stream,
-                "HTTP/1.1 400 BAD REQUEST\r\n\r\nInvalid json payload",
+                &format!("HTTP/1.1 400 BAD REQUEST\r\n\r\nInvalid json payload\n{}", err),
             );
             return;
         }
