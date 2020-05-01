@@ -1,9 +1,9 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use crc::crc32;
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
-use std::io::{prelude::*, ErrorKind::UnexpectedEof, BufReader, Result, SeekFrom};
+use std::io::{prelude::*, BufReader, ErrorKind::UnexpectedEof, Result, SeekFrom};
 use std::path::Path;
-use crc::crc32;
 
 type ByteString = Vec<u8>;
 type ByteStr = [u8];
@@ -75,14 +75,12 @@ impl RustDB {
             let current_position = f.seek(SeekFrom::Current(0))?;
             match RustDB::load_record(&mut f) {
                 Ok(key_value) => self.index.insert(key_value.key, current_position),
-                Err(err) => {
-                    match err.kind() {
-                        UnexpectedEof => {
-                            break;
-                        },
-                        _ => return Err(err),
+                Err(err) => match err.kind() {
+                    UnexpectedEof => {
+                        break;
                     }
-                }
+                    _ => return Err(err),
+                },
             };
         }
 

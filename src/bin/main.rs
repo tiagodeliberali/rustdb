@@ -2,7 +2,6 @@ use rustdb::{KeyValue, RustDB};
 use serde_json::Value;
 use std::io::prelude::*;
 use std::net::{TcpListener, TcpStream};
-use std::sync::{Arc, Mutex};
 
 const INSERT_DATA: &[u8; 17] = b"POST / HTTP/1.1\r\n";
 const UPDATE_DATA: &[u8; 16] = b"PUT / HTTP/1.1\r\n";
@@ -13,18 +12,16 @@ fn main() {
     println!("Loading database...");
     let mut db = RustDB::open();
     db.load();
-    let mut db = Arc::new(Mutex::new(db));
     let listener = TcpListener::bind("127.0.0.1:7887").unwrap();
     println!("Database ready at 7887");
 
     for stream in listener.incoming() {
         let stream = stream.unwrap();
-        let db_clone = Arc::clone(&db);
-        handle_connection(stream, db_clone);
+        handle_connection(stream, &mut db);
     }
 }
 
-fn handle_connection(mut stream: TcpStream, db: Arc<Mutex<RustDB>>) {
+fn handle_connection(mut stream: TcpStream, db: &mut RustDB) {
     let mut buffer = [0; 512];
     let size = stream.read(&mut buffer).unwrap();
 
@@ -50,9 +47,19 @@ fn handle_connection(mut stream: TcpStream, db: Arc<Mutex<RustDB>>) {
     let (response_code, action) = if buffer.starts_with(READ_DATA) {
         let key = key_value.get_key_as_string();
 
-        let (response_code, action) = match db.lock().unwrap().get_record(key.to_string()) {
-            Ok(key_value) => ("200 OK", format!("action :READ\nid: {}\nvalue: {}", key_value.get_key_as_string(), key_value.get_value_as_string().unwrap())),
-            Err(err) => ("500 INTERNAL SERVER ERROR", format!("action :READ\nid: {}\nerror: {}", key, err)),
+        let (response_code, action) = match db.get_record(key.to_string()) {
+            Ok(key_value) => (
+                "200 OK",
+                format!(
+                    "action :READ\nid: {}\nvalue: {}",
+                    key_value.get_key_as_string(),
+                    key_value.get_value_as_string().unwrap()
+                ),
+            ),
+            Err(err) => (
+                "500 INTERNAL SERVER ERROR",
+                format!("action :READ\nid: {}\nerror: {}", key, err),
+            ),
         };
         (response_code, action)
     } else if buffer.starts_with(INSERT_DATA) {
@@ -60,13 +67,22 @@ fn handle_connection(mut stream: TcpStream, db: Arc<Mutex<RustDB>>) {
             Some(value) => {
                 let key = key_value.get_key_as_string();
 
-                let (response_code, action) = match db.lock().unwrap().save_record(key_value) {
-                    Ok(_) => ("200 OK", format!("action :INSERT\nid: {}\nvalue: {}", key, value)),
-                    Err(err) => ("500 INTERNAL SERVER ERROR", format!("action :INSERT\nid: {}\nvalue: {}\nerror: {}", key, value, err)),
+                let (response_code, action) = match db.save_record(key_value) {
+                    Ok(_) => (
+                        "200 OK",
+                        format!("action :INSERT\nid: {}\nvalue: {}", key, value),
+                    ),
+                    Err(err) => (
+                        "500 INTERNAL SERVER ERROR",
+                        format!(
+                            "action :INSERT\nid: {}\nvalue: {}\nerror: {}",
+                            key, value, err
+                        ),
+                    ),
                 };
 
                 (response_code, action)
-            },
+            }
             None => ("400 BAD REQUEST", String::from("Missing value to INSERT")),
         }
     } else if buffer.starts_with(UPDATE_DATA) {
