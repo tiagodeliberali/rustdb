@@ -23,14 +23,22 @@ fn main() {
 
     // for now: single threaded - no concurrency
     for stream in listener.incoming() {
-        let stream = stream.unwrap();
-        handle_connection(stream, &mut db);
+        match stream {
+            Ok(result) => handle_connection(result, &mut db),
+            Err(err) => println!("Failed to process current stream\n{}", err),
+        };
     }
 }
 
 fn handle_connection(mut stream: TcpStream, db: &mut RustDB) {
     let mut buffer = [0; 512];
-    let size = stream.read(&mut buffer).unwrap();
+    let size = match stream.read(&mut buffer) {
+        Ok(value) => value,
+        Err(err) => {
+            println!("Failed to read stream\n{}", err);
+            return;
+        }
+    };
 
     let content = String::from_utf8_lossy(&buffer[..size]);
     let content: Vec<&str> = content.split("\r\n\r\n").collect();
@@ -49,15 +57,23 @@ fn handle_connection(mut stream: TcpStream, db: &mut RustDB) {
         response.action, response.status_code, response.response
     );
 
-    let _ = stream.write(build_response(response).as_bytes()).unwrap();
-    stream.flush().unwrap();
+    match stream.write(build_response(response).as_bytes()) {
+        Ok(_) => {
+            if let Err(err) = stream.flush() {
+                println!("Failed to flush stream\n{}", err);
+            }
+        }
+        Err(err) => {
+            println!("Failed to write to stream\n{}", err);
+            return;
+        }
+    };
 }
 
 fn build_response(response: Response) -> String {
     let status_code = match response.status_code {
         200 => "200 OK",
         400 => "400 BAD REQUEST",
-        500 => "500 INTERNAL SERVER ERROR",
         _ => "500 INTERNAL SERVER ERROR",
     };
 
