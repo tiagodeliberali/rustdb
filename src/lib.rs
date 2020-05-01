@@ -64,7 +64,9 @@ impl RustDB {
             let current_position = database_buffer.seek(SeekFrom::Current(0))?;
 
             match RustDB::load_record(&mut database_buffer) {
-                Ok(key_value) => self.index.insert(key_value.key, current_position),
+                Ok(key_value) => {
+                    RustDB::update_index(&mut self.index, &key_value, current_position)
+                }
                 Err(err) => match err.kind() {
                     UnexpectedEof => {
                         break;
@@ -75,6 +77,14 @@ impl RustDB {
         }
 
         Ok(())
+    }
+
+    fn update_index(index: &mut HashMap<ByteString, u64>, key_value: &KeyValue, position: u64) {
+        if key_value.value.len() == 0 && index.contains_key(&key_value.key) {
+            index.remove(&key_value.key);
+        } else {
+            index.insert(key_value.key.to_owned(), position);
+        }
     }
 
     fn load_record(file: &mut BufReader<&File>) -> Result<KeyValue> {
@@ -126,27 +136,30 @@ impl RustDB {
         }
     }
 
-    pub fn delete_record(&self, key: String) -> Result<()> {
+    pub fn delete_record(&mut self, key: String) -> Result<()> {
         let key: Vec<u8> = Vec::from(key);
+        self.save_record(KeyValue::new(key, Vec::new()))?;
         Ok(())
     }
 
-    pub fn save_record(&mut self, mut key_value: KeyValue) -> Result<usize> {
-        let mut value = key_value.value;
+    pub fn save_record(&mut self, mut key_value: KeyValue) -> Result<()> {
         let key_size = key_value.key.len() as u32;
-        let value_size = value.len() as u32;
+        let value_size = key_value.value.len() as u32;
         let total_size = key_size + value_size;
         let mut data: Vec<u8> = Vec::with_capacity(total_size as usize);
 
         data.append(&mut key_value.key);
-        data.append(&mut value);
+        data.append(&mut key_value.value);
         let checksum = crc32::checksum_ieee(&data);
 
         self.database_file.write_u32::<LittleEndian>(checksum)?;
         self.database_file.write_u32::<LittleEndian>(key_size)?;
         self.database_file.write_u32::<LittleEndian>(value_size)?;
-        self.database_file.write(&data)?;
+        let _ = self.database_file.write(&data)?;
 
-        Ok(self.database_file.seek(SeekFrom::Current(0))? as usize)
+        let position = self.database_file.seek(SeekFrom::Current(0))?;
+        RustDB::update_index(&mut self.index, &key_value, position);
+
+        Ok(())
     }
 }
