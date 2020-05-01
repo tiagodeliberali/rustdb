@@ -2,11 +2,13 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crc::crc32;
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
-use std::io::{prelude::*, BufReader, ErrorKind::UnexpectedEof, Result, SeekFrom};
+use std::io::{
+    prelude::*, BufReader, Error, ErrorKind, ErrorKind::UnexpectedEof, Result, SeekFrom,
+};
 use std::path::Path;
 
 type ByteString = Vec<u8>;
-type ByteStr = [u8];
+// type ByteStr = [u8];
 
 pub struct KeyValue {
     key: ByteString,
@@ -22,10 +24,7 @@ impl KeyValue {
     }
 
     pub fn new(key: ByteString, value: ByteString) -> KeyValue {
-        KeyValue {
-            key: key,
-            value: value,
-        }
+        KeyValue { key, value }
     }
 
     pub fn get_key_as_string(&self) -> String {
@@ -38,13 +37,13 @@ impl KeyValue {
 }
 
 pub struct RustDB {
-    f: File,
+    database_file: File,
     index: HashMap<ByteString, u64>,
 }
 
 impl RustDB {
     pub fn open() -> RustDB {
-        let f = OpenOptions::new()
+        let database_file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
@@ -53,17 +52,18 @@ impl RustDB {
             .unwrap();
 
         RustDB {
-            f,
+            database_file,
             index: HashMap::new(),
         }
     }
 
     pub fn load(&mut self) -> Result<()> {
-        let mut f = BufReader::new(&self.f);
+        let mut database_buffer = BufReader::new(&self.database_file);
 
         loop {
-            let current_position = f.seek(SeekFrom::Current(0))?;
-            match RustDB::load_record(&mut f) {
+            let current_position = database_buffer.seek(SeekFrom::Current(0))?;
+
+            match RustDB::load_record(&mut database_buffer) {
                 Ok(key_value) => self.index.insert(key_value.key, current_position),
                 Err(err) => match err.kind() {
                     UnexpectedEof => {
@@ -91,8 +91,18 @@ impl RustDB {
                 .read_to_end(&mut data)?;
         }
 
-        if checksum != crc32::checksum_ieee(&data) {
-            panic!("invalid checksum");
+        let calculated_checksum = crc32::checksum_ieee(&data);
+
+        if checksum != calculated_checksum {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!(
+                    "Invalid checksum at position: {}\nExpected: {}\nFound: {}",
+                    file.seek(SeekFrom::Current(0))?,
+                    calculated_checksum,
+                    checksum
+                ),
+            ));
         }
 
         let (key, value) = data.split_at(key_size);
@@ -102,12 +112,18 @@ impl RustDB {
 
     pub fn get_record(&self, key: String) -> Result<KeyValue> {
         let key: Vec<u8> = Vec::from(key);
-        let key_position = *self.index.get(&key).unwrap();
+        let key_position = match self.index.get(&key) {
+            Some(position) => position,
+            None => return Err(Error::from(ErrorKind::NotFound)),
+        };
 
-        let mut f = BufReader::new(&self.f);
-        let _ = f.seek(SeekFrom::Start(key_position))?;
+        let mut buffer = BufReader::new(&self.database_file);
+        let _ = buffer.seek(SeekFrom::Start(*key_position))?;
 
-        Ok(RustDB::load_record(&mut f).unwrap())
+        match RustDB::load_record(&mut buffer) {
+            Ok(data) => Ok(data),
+            Err(err) => Err(err),
+        }
     }
 
     pub fn delete_record(&self, key: String) -> Result<()> {
@@ -126,11 +142,11 @@ impl RustDB {
         data.append(&mut value);
         let checksum = crc32::checksum_ieee(&data);
 
-        self.f.write_u32::<LittleEndian>(checksum)?;
-        self.f.write_u32::<LittleEndian>(key_size)?;
-        self.f.write_u32::<LittleEndian>(value_size)?;
-        self.f.write(&data)?;
+        self.database_file.write_u32::<LittleEndian>(checksum)?;
+        self.database_file.write_u32::<LittleEndian>(key_size)?;
+        self.database_file.write_u32::<LittleEndian>(value_size)?;
+        self.database_file.write(&data)?;
 
-        Ok(self.f.seek(SeekFrom::Current(0))? as usize)
+        Ok(self.database_file.seek(SeekFrom::Current(0))? as usize)
     }
 }
