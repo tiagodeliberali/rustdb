@@ -26,15 +26,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'main'",
+            "name": "Debug executable 'rustdb_rest'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=main",
+                    "--bin=rustdb_rest",
                     "--package=rustdb"
                 ],
                 "filter": {
-                    "name": "main",
+                    "name": "rustdb_rest",
                     "kind": "bin"
                 }
             },
@@ -44,16 +44,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'main'",
+            "name": "Debug unit tests in executable 'rustdb_rest'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=main",
+                    "--bin=rustdb_rest",
                     "--package=rustdb"
                 ],
                 "filter": {
-                    "name": "main",
+                    "name": "rustdb_rest",
                     "kind": "bin"
                 }
             },
