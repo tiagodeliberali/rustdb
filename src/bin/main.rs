@@ -1,5 +1,6 @@
 use rustdb::{KeyValue, RustDB};
 use serde_json::Value;
+use std::collections::HashMap;
 use std::io::prelude::*;
 use std::net::{TcpListener, TcpStream};
 
@@ -11,10 +12,16 @@ const READ_DATA: &[u8; 16] = b"GET / HTTP/1.1\r\n";
 fn main() {
     println!("Loading database...");
     let mut db = RustDB::open();
-    db.load();
-    let listener = TcpListener::bind("127.0.0.1:7887").unwrap();
+    if let Err(err) = db.load() {
+        panic!("Failed to load database\n{}", err);
+    }
+    let listener = match TcpListener::bind("127.0.0.1:7887") {
+        Ok(listener) => listener,
+        Err(err) => panic!("Failed to bind address\n{}", err),
+    };
     println!("Database ready at 7887");
 
+    // for now: single threaded - no concurrency
     for stream in listener.incoming() {
         let stream = stream.unwrap();
         handle_connection(stream, &mut db);
@@ -25,123 +32,171 @@ fn handle_connection(mut stream: TcpStream, db: &mut RustDB) {
     let mut buffer = [0; 512];
     let size = stream.read(&mut buffer).unwrap();
 
-    let request = String::from_utf8_lossy(&buffer[..size]);
-    let content: Vec<&str> = request.split("\r\n\r\n").collect();
+    let content = String::from_utf8_lossy(&buffer[..size]);
+    let content: Vec<&str> = content.split("\r\n\r\n").collect();
     let content = content[1];
 
-    let key_value = match extract_keyvalue(content) {
-        Ok(v) => v,
-        Err(err) => {
-            println!("[ERROR] Keyvalue parse error: {}", err);
-            return_http(
-                stream,
-                &format!(
-                    "HTTP/1.1 400 BAD REQUEST\r\n\r\nInvalid json payload\n{}",
-                    err
-                ),
-            );
-            return;
+    let mut response = Response::new(400, String::from("UNKNOW ACTION"), String::new());
+
+    for (action_type, action) in build_actions().into_iter() {
+        if buffer.starts_with(action_type) {
+            response = action(content, db);
         }
-    };
+    }
 
-    let (response_code, action) = if buffer.starts_with(READ_DATA) {
-        let key = key_value.get_key_as_string();
+    println!(
+        "action: {} - status_code: {} - response: {}",
+        response.action, response.status_code, response.response
+    );
 
-        let (response_code, action) = match db.get_record(key.to_string()) {
-            Ok(key_value) => (
-                "200 OK",
-                format!(
-                    "action :READ\nid: {}\nvalue: {}",
-                    key_value.get_key_as_string(),
-                    key_value.get_value_as_string().unwrap()
-                ),
-            ),
-            Err(err) => (
-                "500 INTERNAL SERVER ERROR",
-                format!("action :READ\nid: {}\nerror: {}", key, err),
-            ),
-        };
-        (response_code, action)
-    } else if buffer.starts_with(INSERT_DATA) {
-        match key_value.get_value_as_string() {
-            Some(value) => {
-                let key = key_value.get_key_as_string();
-
-                let (response_code, action) = match db.save_record(key_value) {
-                    Ok(_) => (
-                        "200 OK",
-                        format!("action :INSERT\nid: {}\nvalue: {}", key, value),
-                    ),
-                    Err(err) => (
-                        "500 INTERNAL SERVER ERROR",
-                        format!(
-                            "action :INSERT\nid: {}\nvalue: {}\nerror: {}",
-                            key, value, err
-                        ),
-                    ),
-                };
-
-                (response_code, action)
-            }
-            None => ("400 BAD REQUEST", String::from("Missing value to INSERT")),
-        }
-    } else if buffer.starts_with(UPDATE_DATA) {
-        match key_value.get_value_as_string() {
-            Some(value) => (
-                "200 OK",
-                format!(
-                    "action :UPDATE\nid: {}\nvalue: {}",
-                    key_value.get_key_as_string(),
-                    value
-                ),
-            ),
-            None => ("400 BAD REQUEST", String::from("Missing value to UPDATE")),
-        }
-    } else if buffer.starts_with(DELETE_DATA) {
-        (
-            "200 OK",
-            format!("action :DELETE\nid: {}", key_value.get_key_as_string()),
-        )
-    } else {
-        ("400 BAD REQUEST", String::from("unknown comand"))
-    };
-
-    let response = format!("HTTP/1.1 {}\r\n\r\n{}", response_code, action);
-    return_http(stream, &response);
+    let _ = stream.write(build_response(response).as_bytes()).unwrap();
+    stream.flush().unwrap();
 }
 
-fn extract_keyvalue(content: &str) -> Result<KeyValue, String> {
-    let v: Value = match serde_json::from_str(content) {
-        Ok(value) => value,
-        Err(error) => return Err(format!("{}", error)),
+fn build_response(response: Response) -> String {
+    let status_code = match response.status_code {
+        200 => "200 OK",
+        400 => "400 BAD REQUEST",
+        500 => "500 INTERNAL SERVER ERROR",
+        _ => "500 INTERNAL SERVER ERROR",
     };
 
-    let (key, value) = match v {
+    format!("HTTP/1.1 {}\r\n\r\n{}", status_code, response.response)
+}
+
+struct Response {
+    status_code: u16,
+    action: String,
+    response: String,
+}
+
+impl Response {
+    fn new(status_code: u16, action: String, response: String) -> Response {
+        Response {
+            status_code,
+            action,
+            response,
+        }
+    }
+}
+
+type Callback = fn(&str, &mut RustDB) -> Response;
+
+fn build_actions() -> HashMap<&'static [u8], Callback> {
+    let mut actions: HashMap<&[u8], Callback> = HashMap::new();
+    actions.insert(READ_DATA, read_content);
+    actions.insert(DELETE_DATA, delete_content);
+    actions.insert(INSERT_DATA, insert_content);
+    actions.insert(UPDATE_DATA, update_content);
+
+    actions
+}
+
+fn read_content(content: &str, db: &mut RustDB) -> Response {
+    let action = String::from("READ");
+
+    let key = match get_key(content) {
+        Ok(v) => v,
+        Err(err) => return Response::new(400, action, err),
+    };
+
+    let (response_code, result) = match db.get_record(key.to_string()) {
+        Ok(key_value) => (200, key_value.get_value_as_string()),
+        Err(err) => (500, err.to_string()),
+    };
+
+    Response::new(response_code, action, result)
+}
+
+fn delete_content(content: &str, db: &mut RustDB) -> Response {
+    let action = String::from("DELETE");
+
+    let key = match get_key(content) {
+        Ok(v) => v,
+        Err(err) => return Response::new(400, action, err),
+    };
+
+    let (response_code, result) = match db.delete_record(key.to_string()) {
+        Ok(_) => (200, String::new()),
+        Err(err) => (500, err.to_string()),
+    };
+
+    Response::new(response_code, action, result)
+}
+
+fn insert_content(content: &str, db: &mut RustDB) -> Response {
+    let action = String::from("INSERT");
+
+    let key_value = match get_keyvalue(content) {
+        Ok(v) => v,
+        Err(err) => return Response::new(400, action, err),
+    };
+
+    let (response_code, result) = match db.save_record(key_value) {
+        Ok(_) => (200, String::new()),
+        Err(err) => (500, err.to_string()),
+    };
+
+    Response::new(response_code, action, result)
+}
+
+fn update_content(content: &str, db: &mut RustDB) -> Response {
+    let action = String::from("UPDATE");
+
+    let key_value = match get_keyvalue(content) {
+        Ok(v) => v,
+        Err(err) => return Response::new(400, action, err),
+    };
+
+    let (response_code, result) = match db.save_record(key_value) {
+        Ok(_) => (200, String::new()),
+        Err(err) => (500, err.to_string()),
+    };
+
+    Response::new(response_code, action, result)
+}
+
+fn get_key(content: &str) -> Result<String, String> {
+    let json_content: Value = match serde_json::from_str(content) {
+        Ok(value) => value,
+        Err(error) => return Err(error.to_string()),
+    };
+
+    let key = match json_content {
         Value::Null => return Err(String::from("Invalid input: null")),
         Value::Bool(_) => return Err(String::from("Invalid input: boolean")),
         Value::Object(obj) if !obj.contains_key("id") => {
             return Err(String::from("Missing field 'id'"))
         }
         Value::Array(_) => return Err(String::from("Invalid input: array")),
-        Value::Number(id) => (id.to_string(), None),
-        Value::String(id) => (id, None),
-        Value::Object(obj) => {
-            let id = obj["id"].to_string().replace("\"", "");
-            if obj.keys().len() == 1 {
-                (id, None)
-            } else {
-                (id, Some(Value::Object(obj).to_string()))
-            }
-        }
+        Value::Number(id) => id.to_string(),
+        Value::String(id) => id,
+        Value::Object(obj) => obj["id"].to_string().replace("\"", ""),
     };
 
-    match value {
-        Some(v) => Ok(KeyValue::new_from_strings(key, v)),
-        None => Ok(KeyValue::new_no_value(key)),
-    }
+    Ok(key)
 }
 
-fn return_http(mut stream: TcpStream, response: &str) {
-    let _ = stream.write(response.as_bytes()).unwrap();
-    stream.flush().unwrap();
+fn get_keyvalue(content: &str) -> Result<KeyValue, String> {
+    let key = get_key(content)?;
+
+    let v: Value = match serde_json::from_str(content) {
+        Ok(value) => value,
+        Err(error) => return Err(error.to_string()),
+    };
+
+    let value = match v {
+        Value::Object(obj) => {
+            if obj.keys().len() > 1 {
+                Value::Object(obj).to_string()
+            } else {
+                return Err(String::from(
+                    "Invalid input: Missing fields different from id",
+                ));
+            }
+        }
+        _ => return Err(String::from("Invalid input: Missing value")),
+    };
+
+    Ok(KeyValue::new_from_strings(key, value))
 }

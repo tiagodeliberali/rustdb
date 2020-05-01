@@ -10,28 +10,21 @@ type ByteStr = [u8];
 
 pub struct KeyValue {
     key: ByteString,
-    value: Option<ByteString>,
+    value: ByteString,
 }
 
 impl KeyValue {
     pub fn new_from_strings(key: String, value: String) -> KeyValue {
         KeyValue {
             key: key.into_bytes(),
-            value: Option::Some(value.into_bytes()),
+            value: value.into_bytes(),
         }
     }
 
     pub fn new(key: ByteString, value: ByteString) -> KeyValue {
         KeyValue {
             key: key,
-            value: Option::Some(value),
-        }
-    }
-
-    pub fn new_no_value(key: String) -> KeyValue {
-        KeyValue {
-            key: key.into_bytes(),
-            value: Option::None,
+            value: value,
         }
     }
 
@@ -39,11 +32,8 @@ impl KeyValue {
         String::from_utf8_lossy(&self.key).into_owned()
     }
 
-    pub fn get_value_as_string(&self) -> Option<String> {
-        match &self.value {
-            Some(value) => Some(String::from_utf8_lossy(&value).into_owned()),
-            None => None,
-        }
+    pub fn get_value_as_string(&self) -> String {
+        String::from_utf8_lossy(&self.value).into_owned()
     }
 }
 
@@ -120,8 +110,13 @@ impl RustDB {
         Ok(RustDB::load_record(&mut f).unwrap())
     }
 
+    pub fn delete_record(&self, key: String) -> Result<()> {
+        let key: Vec<u8> = Vec::from(key);
+        Ok(())
+    }
+
     pub fn save_record(&mut self, mut key_value: KeyValue) -> Result<usize> {
-        let mut value = key_value.value.unwrap();
+        let mut value = key_value.value;
         let key_size = key_value.key.len() as u32;
         let value_size = value.len() as u32;
         let total_size = key_size + value_size;
