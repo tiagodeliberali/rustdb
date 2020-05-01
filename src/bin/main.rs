@@ -63,10 +63,7 @@ fn handle_connection(mut stream: TcpStream, db: &mut RustDB) {
                 println!("Failed to flush stream\n{}", err);
             }
         }
-        Err(err) => {
-            println!("Failed to write to stream\n{}", err);
-            return;
-        }
+        Err(err) => println!("Failed to write to stream\n{}", err),
     };
 }
 
@@ -76,7 +73,6 @@ fn build_response(response: Response) -> String {
         400 => "400 BAD REQUEST",
         _ => "500 INTERNAL SERVER ERROR",
     };
-
     format!("HTTP/1.1 {}\r\n\r\n{}", status_code, response.response)
 }
 
