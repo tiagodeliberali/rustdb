@@ -9,6 +9,16 @@ const UPDATE_DATA: &[u8; 16] = b"PUT / HTTP/1.1\r\n";
 const DELETE_DATA: &[u8; 19] = b"DELETE / HTTP/1.1\r\n";
 const READ_DATA: &[u8; 16] = b"GET / HTTP/1.1\r\n";
 
+#[cfg(debug_assertions)]
+fn debug(msg: &str) {
+    println!("[DEBUG INFO]: {}", msg);
+}
+
+#[cfg(not(debug_assertions))]
+fn debug(msg: &str) {
+   // do nothing
+}
+
 fn main() {
     println!("Loading database...");
     let mut db = RustDB::open();
@@ -52,10 +62,10 @@ fn handle_connection(mut stream: TcpStream, db: &mut RustDB) {
         }
     }
 
-    println!(
+    debug(&format!(
         "action: {} - status_code: {} - response: {}",
         response.action, response.status_code, response.response
-    );
+    ));
 
     match stream.write(build_response(response).as_bytes()) {
         Ok(_) => {
