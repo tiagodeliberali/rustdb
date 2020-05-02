@@ -1,7 +1,7 @@
 use rustdb::{KeyValue, RustDB};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::io::{prelude::*, ErrorKind};
+use std::io::prelude::*;
 use std::net::{TcpListener, TcpStream};
 
 const INSERT_DATA: &[u8; 17] = b"POST / HTTP/1.1\r\n";
@@ -113,12 +113,12 @@ fn read_content(content: &str, db: &mut RustDB) -> Response {
         Err(err) => return Response::new(400, action, err),
     };
 
-    let (response_code, result) = match db.get_record(key.to_string()) {
-        Ok(key_value) => (200, key_value.get_value_as_string()),
-        Err(err) => match err.kind() {
-            ErrorKind::NotFound => (204, String::new()),
-            _ => (500, err.to_string())
+    let (response_code, result) = match db.get_record(key) {
+        Ok(key_value) => match key_value {
+            Some(kv) => (200, kv.get_value_as_string()),
+            None => (204, String::new()),
         },
+        Err(err) => (500, err.to_string()),
     };
 
     Response::new(response_code, action, result)

@@ -8,7 +8,6 @@ use std::io::{
 use std::path::Path;
 
 type ByteString = Vec<u8>;
-// type ByteStr = [u8];
 
 pub struct KeyValue {
     key: ByteString,
@@ -120,18 +119,18 @@ impl RustDB {
         Ok(KeyValue::new(key.to_vec(), value.to_vec()))
     }
 
-    pub fn get_record(&self, key: String) -> Result<KeyValue> {
+    pub fn get_record(&self, key: String) -> Result<Option<KeyValue>> {
         let key: Vec<u8> = Vec::from(key);
         let key_position = match self.index.get(&key) {
             Some(position) => position,
-            None => return Err(Error::from(ErrorKind::NotFound)),
+            None => return Ok(None),
         };
 
         let mut buffer = BufReader::new(&self.database_file);
         let _ = buffer.seek(SeekFrom::Start(*key_position))?;
 
         match RustDB::load_record(&mut buffer) {
-            Ok(data) => Ok(data),
+            Ok(data) => Ok(Some(data)),
             Err(err) => Err(err),
         }
     }
@@ -144,7 +143,7 @@ impl RustDB {
 
     pub fn save_record(&mut self, mut key_value: KeyValue) -> Result<()> {
         let position = self.database_file.seek(SeekFrom::Current(0))?;
-        
+
         let key_size = key_value.key.len() as u32;
         let value_size = key_value.value.len() as u32;
         let total_size = key_size + value_size;
