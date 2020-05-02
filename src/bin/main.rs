@@ -54,17 +54,23 @@ fn handle_connection(mut stream: TcpStream, db: &mut RustDB) {
     let content: Vec<&str> = content.split("\r\n\r\n").collect();
     let content = content[1];
 
-    let mut response = Response::new(400, String::from("UNKNOW ACTION"), String::new());
+    let mut response = Response::new(400, String::new());
+    let mut rest_action = String::from("UNKNOW");
 
     for (action_type, action) in build_actions().into_iter() {
         if buffer.starts_with(action_type) {
             response = action(content, db);
+            rest_action = String::from_utf8_lossy(action_type)
+                .splitn(2, ' ')
+                .next()
+                .unwrap()
+                .to_owned();
         }
     }
 
     debug(&format!(
         "action: {} - status_code: {} - response: {}",
-        response.action, response.status_code, response.response
+        rest_action, response.status_code, response.response
     ));
 
     match stream.write(build_response(response).as_bytes()) {
@@ -89,15 +95,13 @@ fn build_response(response: Response) -> String {
 
 struct Response {
     status_code: u16,
-    action: String,
     response: String,
 }
 
 impl Response {
-    fn new(status_code: u16, action: String, response: String) -> Response {
+    fn new(status_code: u16, response: String) -> Response {
         Response {
             status_code,
-            action,
             response,
         }
     }
@@ -109,18 +113,16 @@ fn build_actions() -> HashMap<&'static [u8], Callback> {
     let mut actions: HashMap<&[u8], Callback> = HashMap::new();
     actions.insert(READ_DATA, read_content);
     actions.insert(DELETE_DATA, delete_content);
-    actions.insert(INSERT_DATA, insert_content);
+    actions.insert(INSERT_DATA, update_content);
     actions.insert(UPDATE_DATA, update_content);
 
     actions
 }
 
 fn read_content(content: &str, db: &mut RustDB) -> Response {
-    let action = String::from("READ");
-
     let key = match get_key(content) {
         Ok(v) => v,
-        Err(err) => return Response::new(400, action, err),
+        Err(err) => return Response::new(400, err),
     };
 
     let (response_code, result) = match db.get_record(key) {
@@ -131,47 +133,27 @@ fn read_content(content: &str, db: &mut RustDB) -> Response {
         Err(err) => (500, err.to_string()),
     };
 
-    Response::new(response_code, action, result)
+    Response::new(response_code, result)
 }
 
 fn delete_content(content: &str, db: &mut RustDB) -> Response {
-    let action = String::from("DELETE");
-
     let key = match get_key(content) {
         Ok(v) => v,
-        Err(err) => return Response::new(400, action, err),
+        Err(err) => return Response::new(400, err),
     };
 
-    let (response_code, result) = match db.delete_record(key.to_string()) {
+    let (response_code, result) = match db.delete_record(key) {
         Ok(_) => (200, String::new()),
         Err(err) => (500, err.to_string()),
     };
 
-    Response::new(response_code, action, result)
-}
-
-fn insert_content(content: &str, db: &mut RustDB) -> Response {
-    let action = String::from("INSERT");
-
-    let key_value = match get_keyvalue(content) {
-        Ok(v) => v,
-        Err(err) => return Response::new(400, action, err),
-    };
-
-    let (response_code, result) = match db.save_record(key_value) {
-        Ok(_) => (200, String::new()),
-        Err(err) => (500, err.to_string()),
-    };
-
-    Response::new(response_code, action, result)
+    Response::new(response_code, result)
 }
 
 fn update_content(content: &str, db: &mut RustDB) -> Response {
-    let action = String::from("UPDATE");
-
     let key_value = match get_keyvalue(content) {
         Ok(v) => v,
-        Err(err) => return Response::new(400, action, err),
+        Err(err) => return Response::new(400, err),
     };
 
     let (response_code, result) = match db.save_record(key_value) {
@@ -179,7 +161,7 @@ fn update_content(content: &str, db: &mut RustDB) -> Response {
         Err(err) => (500, err.to_string()),
     };
 
-    Response::new(response_code, action, result)
+    Response::new(response_code, result)
 }
 
 fn get_key(content: &str) -> Result<String, String> {
