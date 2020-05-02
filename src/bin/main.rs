@@ -15,7 +15,7 @@ fn debug(msg: &str) {
 }
 
 #[cfg(not(debug_assertions))]
-fn debug(msg: &str) {
+fn debug(_msg: &str) {
     // do nothing
 }
 
@@ -55,22 +55,16 @@ fn handle_connection(mut stream: TcpStream, db: &mut RustDB) {
     let content = content[1];
 
     let mut response = Response::new(400, String::new());
-    let mut rest_action = String::from("UNKNOW");
 
     for (action_type, action) in build_actions().into_iter() {
         if buffer.starts_with(action_type) {
             response = action(content, db);
-            rest_action = String::from_utf8_lossy(action_type)
-                .splitn(2, ' ')
-                .next()
-                .unwrap()
-                .to_owned();
         }
     }
 
     debug(&format!(
-        "action: {} - status_code: {} - response: {}",
-        rest_action, response.status_code, response.response
+        "status_code: {} - response: {}",
+        response.status_code, response.response
     ));
 
     match stream.write(build_response(response).as_bytes()) {
