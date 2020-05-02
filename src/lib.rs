@@ -143,12 +143,14 @@ impl RustDB {
     }
 
     pub fn save_record(&mut self, mut key_value: KeyValue) -> Result<()> {
+        let position = self.database_file.seek(SeekFrom::Current(0))?;
+        
         let key_size = key_value.key.len() as u32;
         let value_size = key_value.value.len() as u32;
         let total_size = key_size + value_size;
         let mut data: Vec<u8> = Vec::with_capacity(total_size as usize);
 
-        data.append(&mut key_value.key);
+        data.append(&mut key_value.key.clone());
         data.append(&mut key_value.value);
         let checksum = crc32::checksum_ieee(&data);
 
@@ -157,7 +159,6 @@ impl RustDB {
         self.database_file.write_u32::<LittleEndian>(value_size)?;
         let _ = self.database_file.write(&data)?;
 
-        let position = self.database_file.seek(SeekFrom::Current(0))?;
         RustDB::update_index(&mut self.index, &key_value, position);
 
         Ok(())
