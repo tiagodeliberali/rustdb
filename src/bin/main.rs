@@ -16,7 +16,7 @@ fn debug(msg: &str) {
 
 #[cfg(not(debug_assertions))]
 fn debug(msg: &str) {
-   // do nothing
+    // do nothing
 }
 
 fn main() {
