@@ -1,7 +1,7 @@
 use rustdb::{KeyValue, RustDB};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::io::prelude::*;
+use std::io::{prelude::*, ErrorKind};
 use std::net::{TcpListener, TcpStream};
 
 const INSERT_DATA: &[u8; 17] = b"POST / HTTP/1.1\r\n";
@@ -70,6 +70,7 @@ fn handle_connection(mut stream: TcpStream, db: &mut RustDB) {
 fn build_response(response: Response) -> String {
     let status_code = match response.status_code {
         200 => "200 OK",
+        204 => "204 NO CONTENT",
         400 => "400 BAD REQUEST",
         _ => "500 INTERNAL SERVER ERROR",
     };
@@ -114,7 +115,10 @@ fn read_content(content: &str, db: &mut RustDB) -> Response {
 
     let (response_code, result) = match db.get_record(key.to_string()) {
         Ok(key_value) => (200, key_value.get_value_as_string()),
-        Err(err) => (500, err.to_string()),
+        Err(err) => match err.kind() {
+            ErrorKind::NotFound => (204, String::new()),
+            _ => (500, err.to_string())
+        },
     };
 
     Response::new(response_code, action, result)
