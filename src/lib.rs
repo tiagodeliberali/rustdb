@@ -35,13 +35,16 @@ impl KeyValue {
     }
 }
 
-pub struct RustDB {
+struct DataSgment {
     database_file: File,
     index: HashMap<ByteString, u64>,
+    closed: bool,
+    previous: Option<Box<DataSgment>>,
+    size: u64,
 }
 
-impl RustDB {
-    pub fn open() -> RustDB {
+impl DataSgment {
+    fn open() -> DataSgment {
         let database_file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -50,21 +53,27 @@ impl RustDB {
             .open(Path::new("./current_db"))
             .unwrap();
 
-        RustDB {
+        let mut buffer = BufReader::new(&database_file);
+        let size = buffer.seek(SeekFrom::End(0)).unwrap();
+
+        DataSgment {
             database_file,
             index: HashMap::new(),
+            closed: true,
+            previous: None,
+            size
         }
     }
 
-    pub fn load(&mut self) -> Result<()> {
+    fn load(&mut self) -> Result<()> {
         let mut database_buffer = BufReader::new(&self.database_file);
 
         loop {
             let current_position = database_buffer.seek(SeekFrom::Current(0))?;
 
-            match RustDB::load_record(&mut database_buffer) {
+            match DataSgment::load_record(&mut database_buffer) {
                 Ok(key_value) => {
-                    RustDB::update_index(&mut self.index, &key_value, current_position)
+                    DataSgment::update_index(&mut self.index, &key_value, current_position)
                 }
                 Err(err) => match err.kind() {
                     UnexpectedEof => {
@@ -119,7 +128,7 @@ impl RustDB {
         Ok(KeyValue::new(key.to_vec(), value.to_vec()))
     }
 
-    pub fn get_record(&self, key: String) -> Result<Option<KeyValue>> {
+    fn get_record(&self, key: String) -> Result<Option<KeyValue>> {
         let key: Vec<u8> = Vec::from(key);
         let key_position = match self.index.get(&key) {
             Some(position) => position,
@@ -129,19 +138,19 @@ impl RustDB {
         let mut buffer = BufReader::new(&self.database_file);
         let _ = buffer.seek(SeekFrom::Start(*key_position))?;
 
-        match RustDB::load_record(&mut buffer) {
+        match DataSgment::load_record(&mut buffer) {
             Ok(data) => Ok(Some(data)),
             Err(err) => Err(err),
         }
     }
 
-    pub fn delete_record(&mut self, key: String) -> Result<()> {
+    fn delete_record(&mut self, key: String) -> Result<()> {
         let key: Vec<u8> = Vec::from(key);
         self.save_record(KeyValue::new(key, Vec::new()))?;
         Ok(())
     }
 
-    pub fn save_record(&mut self, key_value: KeyValue) -> Result<()> {
+    fn save_record(&mut self, key_value: KeyValue) -> Result<()> {
         let position = self.database_file.seek(SeekFrom::End(0))?;
 
         let key_size = key_value.key.len() as u32;
@@ -158,8 +167,36 @@ impl RustDB {
         self.database_file.write_u32::<LittleEndian>(value_size)?;
         let _ = self.database_file.write(&data)?;
 
-        RustDB::update_index(&mut self.index, &key_value, position);
+        DataSgment::update_index(&mut self.index, &key_value, position);
 
         Ok(())
+    }
+}
+
+pub struct RustDB {
+    segment: DataSgment,
+}
+
+impl RustDB {
+    pub fn open() -> RustDB {
+        RustDB {
+            segment: DataSgment::open()
+        }
+    }
+
+    pub fn load(&mut self) -> Result<()> {
+        self.segment.load()
+    }
+
+    pub fn get_record(&self, key: String) -> Result<Option<KeyValue>> {
+        self.segment.get_record(key)
+    }
+
+    pub fn delete_record(&mut self, key: String) -> Result<()> {
+        self.segment.delete_record(key)
+    }
+
+    pub fn save_record(&mut self, key_value: KeyValue) -> Result<()> {
+        self.segment.save_record(key_value)
     }
 }
