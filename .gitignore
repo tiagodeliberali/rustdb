@@ -1,4 +1,5 @@
 /target
 /jmeter
-/storage
-current_db
+/storage/*
+/storage_test/*
+!/storage_test/current_db

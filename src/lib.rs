@@ -1,12 +1,12 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crc::crc32;
+use rand::random;
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{
     prelude::*, BufReader, Error, ErrorKind, ErrorKind::UnexpectedEof, Result, SeekFrom,
 };
 use std::path::Path;
-use rand::random;
 
 type ByteString = Vec<u8>;
 
@@ -45,13 +45,17 @@ struct DataSgment {
 }
 
 impl DataSgment {
-    fn new() -> DataSgment {
+    fn new(folder: &str) -> DataSgment {
         let database_file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .append(true)
-            .open(Path::new(&format!("./storage/rand_name_{}/", random::<u64>())))
+            .open(Path::new(&format!(
+                "./{}/current_db_{}",
+                folder,
+                random::<u64>()
+            )))
             .unwrap();
 
         let mut buffer = BufReader::new(&database_file);
@@ -62,7 +66,7 @@ impl DataSgment {
             index: HashMap::new(),
             closed: false,
             previous: None,
-            size
+            size,
         }
     }
 
@@ -83,7 +87,7 @@ impl DataSgment {
             index: HashMap::new(),
             closed: true,
             previous: None,
-            size
+            size,
         };
 
         segment.load().unwrap();
@@ -206,7 +210,13 @@ pub struct RustDB {
 impl RustDB {
     pub fn open(file_name: &str) -> RustDB {
         RustDB {
-            segment: DataSgment::open(file_name)
+            segment: DataSgment::open(file_name),
+        }
+    }
+
+    pub fn new(folder: &str) -> RustDB {
+        RustDB {
+            segment: DataSgment::new(folder),
         }
     }
 
@@ -220,5 +230,23 @@ impl RustDB {
 
     pub fn save_record(&mut self, key_value: KeyValue) -> Result<()> {
         self.segment.save_record(key_value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    static STORAGE_TEST_FOLDER: &str = "storage_test";
+
+    #[test]
+    fn create_empty_segment_on_new_db() {
+        let db = RustDB::new(STORAGE_TEST_FOLDER);
+
+        let segment = db.segment;
+
+        assert_eq!(segment.closed, false);
+        assert_eq!(segment.size, 0);
+        assert_eq!(segment.previous.is_none(), true);
     }
 }
