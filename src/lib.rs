@@ -6,6 +6,7 @@ use std::io::{
     prelude::*, BufReader, Error, ErrorKind, ErrorKind::UnexpectedEof, Result, SeekFrom,
 };
 use std::path::Path;
+use rand::random;
 
 type ByteString = Vec<u8>;
 
@@ -50,7 +51,7 @@ impl DataSgment {
             .write(true)
             .create(true)
             .append(true)
-            .open(Path::new("./rand_name"))
+            .open(Path::new(&format!("./storage/rand_name_{}/", random::<u64>())))
             .unwrap();
 
         let mut buffer = BufReader::new(&database_file);
