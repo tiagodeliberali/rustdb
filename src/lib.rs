@@ -275,6 +275,9 @@ mod tests {
 
         let data = data.unwrap();
         assert_eq!(data.get_key_as_string(), "1234");
-        assert_eq!(data.get_value_as_string(), "{\"email\":\"tiago@test.com\",\"id\":\"1234\",\"name\":\"Tiago\"}");
+        assert_eq!(
+            data.get_value_as_string(),
+            "{\"email\":\"tiago@test.com\",\"id\":\"1234\",\"name\":\"Tiago\"}"
+        );
     }
 }
