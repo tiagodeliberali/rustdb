@@ -97,6 +97,7 @@ impl DataSgment {
 
     fn load(&mut self) -> Result<()> {
         let mut database_buffer = BufReader::new(&self.database_file);
+        let _ = database_buffer.seek(SeekFrom::Start(0))?;
 
         loop {
             let current_position = database_buffer.seek(SeekFrom::Current(0))?;
@@ -238,6 +239,7 @@ mod tests {
     use super::*;
 
     static STORAGE_TEST_FOLDER: &str = "storage_test";
+    static STORAGE_TEST_FILE: &str = "./storage_test/current_db";
 
     #[test]
     fn create_empty_segment_on_new_db() {
@@ -248,5 +250,31 @@ mod tests {
         assert_eq!(segment.closed, false);
         assert_eq!(segment.size, 0);
         assert_eq!(segment.previous.is_none(), true);
+    }
+
+    #[test]
+    fn open_existing_segment() {
+        let db = RustDB::open(STORAGE_TEST_FILE);
+
+        let segment = db.segment;
+
+        assert_eq!(segment.closed, true);
+        assert_eq!(segment.size, 69);
+        assert_eq!(segment.previous.is_none(), true);
+    }
+
+    #[test]
+    fn open_existing_segment_and_find_record() {
+        let db = RustDB::open(STORAGE_TEST_FILE);
+
+        let data = db.get_record(String::from("1234"));
+        assert_eq!(data.is_ok(), true);
+
+        let data = data.unwrap();
+        assert_eq!(data.is_some(), true);
+
+        let data = data.unwrap();
+        assert_eq!(data.get_key_as_string(), "1234");
+        assert_eq!(data.get_value_as_string(), "{\"email\":\"tiago@test.com\",\"id\":\"1234\",\"name\":\"Tiago\"}");
     }
 }
