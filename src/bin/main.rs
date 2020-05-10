@@ -21,10 +21,7 @@ fn debug(_msg: &str) {
 
 fn main() {
     println!("Loading database...");
-    let mut db = RustDB::open();
-    if let Err(err) = db.load() {
-        panic!("Failed to load database\n{}", err);
-    }
+    let mut db = RustDB::open("./current_db");
     let listener = match TcpListener::bind("127.0.0.1:7887") {
         Ok(listener) => listener,
         Err(err) => panic!("Failed to bind address\n{}", err),

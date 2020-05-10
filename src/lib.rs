@@ -44,13 +44,13 @@ struct DataSgment {
 }
 
 impl DataSgment {
-    fn open() -> DataSgment {
+    fn new() -> DataSgment {
         let database_file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .append(true)
-            .open(Path::new("./current_db"))
+            .open(Path::new("./rand_name"))
             .unwrap();
 
         let mut buffer = BufReader::new(&database_file);
@@ -59,10 +59,35 @@ impl DataSgment {
         DataSgment {
             database_file,
             index: HashMap::new(),
-            closed: true,
+            closed: false,
             previous: None,
             size
         }
+    }
+
+    fn open(file_name: &str) -> DataSgment {
+        let database_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .append(true)
+            .open(Path::new(file_name))
+            .unwrap();
+
+        let mut buffer = BufReader::new(&database_file);
+        let size = buffer.seek(SeekFrom::End(0)).unwrap();
+
+        let mut segment = DataSgment {
+            database_file,
+            index: HashMap::new(),
+            closed: true,
+            previous: None,
+            size
+        };
+
+        segment.load().unwrap();
+
+        segment
     }
 
     fn load(&mut self) -> Result<()> {
@@ -178,14 +203,10 @@ pub struct RustDB {
 }
 
 impl RustDB {
-    pub fn open() -> RustDB {
+    pub fn open(file_name: &str) -> RustDB {
         RustDB {
-            segment: DataSgment::open()
+            segment: DataSgment::open(file_name)
         }
-    }
-
-    pub fn load(&mut self) -> Result<()> {
-        self.segment.load()
     }
 
     pub fn get_record(&self, key: String) -> Result<Option<KeyValue>> {
