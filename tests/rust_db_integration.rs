@@ -46,15 +46,18 @@ fn load_folder_and_find_all_records() {
     assert_eq!(data3.is_ok(), true);
     assert_eq!(data4.is_ok(), true);
 
-    assert_eq!(data1.unwrap().is_some(), true);
-    assert_eq!(data2.unwrap().is_some(), true);
-    assert_eq!(data3.unwrap().is_some(), true);
-    assert_eq!(data4.unwrap().is_some(), true);
+    validate_value(data1.unwrap(), "{\"email\":\"tiago@test.com\",\"id\":\"1234\",\"name\":\"Tiago\"}");
+    validate_value(data2.unwrap(), "{\"email\":\"glau@test.com\",\"id\":\"1235\",\"name\":\"Glau\"}");
+    validate_value(data3.unwrap(), "{\"email\":\"alice_novo@test.com\",\"id\":\"1236\",\"name\":\"Alice atualizado\"}");
+    validate_value(data4.unwrap(), "{\"email\":\"lucas@test.com\",\"id\":\"1237\",\"name\":\"Lucas\"}");
+}
 
-    // assert_eq!(
-    //     data1.unwrap().unwrap().get_value_as_string(),
-    //     "{\"email\":\"tiago@test.com\",\"id\":\"1234\",\"name\":\"Tiago\"}"
-    // );
+fn validate_value(result: Option<KeyValue>, content: &str) {
+    if let Some(value) = result {
+        assert_eq!(value.get_value_as_string(), content);
+    } else {
+        assert!(false, "result is empty");
+    }
 }
 
 #[test]
