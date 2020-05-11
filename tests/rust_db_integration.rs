@@ -1,4 +1,6 @@
 use rustdb::{KeyValue, RustDB};
+use rand::random;
+use std::fs::remove_dir_all;
 
 static STORAGE_TEST_FOLDER: &str = "storage_test";
 static STORAGE_TEST_READONLY_FOLDER: &str = "./readonly_storage_test";
@@ -63,7 +65,9 @@ fn validate_value(result: Option<KeyValue>, content: &str) {
 #[test]
 fn open_new_file_and_add_item() {
     // arrange
-    let mut db = RustDB::new(STORAGE_TEST_FOLDER);
+    let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+
+    let mut db = RustDB::new(path);
     let key_value = KeyValue::new_from_strings(String::from(KEY), String::from(VALUE));
 
     // act
@@ -79,15 +83,19 @@ fn open_new_file_and_add_item() {
     let data = data.unwrap();
     assert_eq!(data.get_key_as_string(), KEY);
     assert_eq!(data.get_value_as_string(), VALUE);
+
+    remove_dir_all(format!("./{}", path)).unwrap();
 }
 
 #[test]
 fn open_new_file_and_update_item() {
     // arrange
+    let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+
     let updated_value =
         "{\"email\":\"tiago@test.com\",\"id\":\"1234\",\"name\":\"Tiago updated name\"}";
 
-    let mut db = RustDB::new(STORAGE_TEST_FOLDER);
+    let mut db = RustDB::new(path);
     let key_value_original = KeyValue::new_from_strings(String::from(KEY), String::from(VALUE));
     let key_value_updated =
         KeyValue::new_from_strings(String::from(KEY), String::from(updated_value));
@@ -106,12 +114,16 @@ fn open_new_file_and_update_item() {
     let data = data.unwrap();
     assert_eq!(data.get_key_as_string(), KEY);
     assert_eq!(data.get_value_as_string(), updated_value);
+
+    remove_dir_all(format!("./{}", path)).unwrap();
 }
 
 #[test]
 fn open_new_file_and_delete_item() {
     // arrange
-    let mut db = RustDB::new(STORAGE_TEST_FOLDER);
+    let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+
+    let mut db = RustDB::new(path);
     let key_value = KeyValue::new_from_strings(String::from(KEY), String::from(VALUE));
 
     // act
@@ -124,4 +136,6 @@ fn open_new_file_and_delete_item() {
 
     let data = data.unwrap();
     assert_eq!(data.is_none(), true);
+
+    remove_dir_all(format!("./{}", path)).unwrap();
 }

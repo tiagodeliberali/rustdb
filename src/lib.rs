@@ -2,7 +2,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crc::crc32;
 use rand::random;
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions, read_dir};
+use std::fs::{File, OpenOptions, read_dir, create_dir_all};
 use std::io::{
     prelude::*, BufReader, Error, ErrorKind, ErrorKind::UnexpectedEof, Result, SeekFrom,
 };
@@ -46,6 +46,8 @@ struct DataSgment {
 
 impl DataSgment {
     fn new(folder: &str) -> DataSgment {
+        create_dir_all(format!("./{}", folder)).unwrap();
+
         let database_file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -280,32 +282,25 @@ impl RustDB {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::remove_file;
+    use std::fs::remove_dir_all;
 
-    static STORAGE_TEST_FOLDER: &str = "storage_test";
+    static STORAGE_TEST_FOLDER: &str = "storage_test_";
     static STORAGE_TEST_READONLY_FOLDER: &str = "./readonly_storage_test";
     static STORAGE_TEST_FILE: &str = "./readonly_storage_test/integration_current_db";
 
-    fn delete_files() {
-        let paths: Vec<_> = read_dir(format!("./{}", STORAGE_TEST_FOLDER)).unwrap()
-                                              .map(|r| r.unwrap())
-                                              .filter(|r| !r.path().file_name().to_owned().unwrap().to_str().unwrap().starts_with("integration_"))
-                                              .collect();
-
-        for path in paths {
-            remove_file(path.path()).unwrap();
-        }
-    }
-
     #[test]
     fn create_empty_segment_on_new_db() {
-        let db = RustDB::new(STORAGE_TEST_FOLDER);
+        let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+
+        let db = RustDB::new(path);
 
         let segment = db.segment;
 
         assert_eq!(segment.closed, false);
         assert_eq!(segment.size, 0);
         assert_eq!(segment.previous.is_none(), true);
+
+        remove_dir_all(format!("./{}", path)).unwrap();
     }
 
     #[test]
@@ -321,8 +316,6 @@ mod tests {
 
     #[test]
     fn load_segments() {
-        delete_files();
-
         let db = RustDB::load(STORAGE_TEST_READONLY_FOLDER);
 
         let segment = &db.segment;
