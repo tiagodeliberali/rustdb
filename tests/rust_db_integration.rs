@@ -1,7 +1,8 @@
 use rustdb::{KeyValue, RustDB};
 
 static STORAGE_TEST_FOLDER: &str = "storage_test";
-static STORAGE_TEST_FILE: &str = "./storage_test/current_db";
+static STORAGE_TEST_READONLY_FOLDER: &str = "./readonly_storage_test";
+static STORAGE_TEST_FILE: &str = "./readonly_storage_test/integration_current_db";
 
 static KEY: &str = "ABC";
 static VALUE: &str = "{\"id\":\"ABC\",\"name\":\"Tiago\"}";
@@ -26,6 +27,34 @@ fn open_existing_segment_and_find_record() {
         data.get_value_as_string(),
         "{\"email\":\"tiago@test.com\",\"id\":\"1234\",\"name\":\"Tiago\"}"
     );
+}
+
+#[test]
+fn load_folder_and_find_all_records() {
+    // arrange
+    let db = RustDB::load(STORAGE_TEST_READONLY_FOLDER);
+
+    // act
+    let data1 = db.get_record(String::from("1234"));
+    let data2 = db.get_record(String::from("1235"));
+    let data3 = db.get_record(String::from("1236"));
+    let data4 = db.get_record(String::from("1237"));
+
+    // assert
+    assert_eq!(data1.is_ok(), true);
+    assert_eq!(data2.is_ok(), true);
+    assert_eq!(data3.is_ok(), true);
+    assert_eq!(data4.is_ok(), true);
+
+    assert_eq!(data1.unwrap().is_some(), true);
+    assert_eq!(data2.unwrap().is_some(), true);
+    assert_eq!(data3.unwrap().is_some(), true);
+    assert_eq!(data4.unwrap().is_some(), true);
+
+    // assert_eq!(
+    //     data1.unwrap().unwrap().get_value_as_string(),
+    //     "{\"email\":\"tiago@test.com\",\"id\":\"1234\",\"name\":\"Tiago\"}"
+    // );
 }
 
 #[test]

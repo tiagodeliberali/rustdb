@@ -2,4 +2,3 @@
 /jmeter
 /storage/*
 /storage_test/*
-!/storage_test/current_db

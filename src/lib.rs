@@ -2,7 +2,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crc::crc32;
 use rand::random;
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
+use std::fs::{File, OpenOptions, read_dir};
 use std::io::{
     prelude::*, BufReader, Error, ErrorKind, ErrorKind::UnexpectedEof, Result, SeekFrom,
 };
@@ -221,8 +221,51 @@ impl RustDB {
         }
     }
 
+    pub fn load(folder: &str)  -> RustDB {
+        let mut paths: Vec<_> = read_dir(format!("./{}", folder)).unwrap()
+                                              .map(|r| r.unwrap())
+                                              .collect();
+
+        paths.sort_by_key(|dir| dir.metadata().unwrap().created().unwrap());
+
+        let mut segment = None;
+        for path in paths {
+            let mut current = DataSgment::open(path.path().to_str().unwrap());
+            segment = match segment {
+                None => Some(current),
+                Some(value) => {
+                    current.previous = Some(Box::from(value));
+                    Some(current)
+                }
+            }
+        }
+
+        let segment = match segment {
+            None => DataSgment::new(folder),
+            Some(value) => value,
+        };
+
+        RustDB {
+            segment
+        }
+    }
+
     pub fn get_record(&self, key: String) -> Result<Option<KeyValue>> {
-        self.segment.get_record(key)
+        self.get_record_from_segment(&key, &self.segment)
+    }
+
+    fn get_record_from_segment(&self, key: &str, segment: &DataSgment) -> Result<Option<KeyValue>> {
+        let record = segment.get_record(String::from(key))?;
+
+        match record {
+            Some(_) => return Ok(record),
+            None => {
+                if let Some(next) = &segment.previous {
+                    return self.get_record_from_segment(key, &next);
+                }
+                return Ok(None);
+            }
+        }
     }
 
     pub fn delete_record(&mut self, key: String) -> Result<()> {
@@ -237,9 +280,22 @@ impl RustDB {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::remove_file;
 
     static STORAGE_TEST_FOLDER: &str = "storage_test";
-    static STORAGE_TEST_FILE: &str = "./storage_test/current_db";
+    static STORAGE_TEST_READONLY_FOLDER: &str = "./readonly_storage_test";
+    static STORAGE_TEST_FILE: &str = "./readonly_storage_test/integration_current_db";
+
+    fn delete_files() {
+        let paths: Vec<_> = read_dir(format!("./{}", STORAGE_TEST_FOLDER)).unwrap()
+                                              .map(|r| r.unwrap())
+                                              .filter(|r| !r.path().file_name().to_owned().unwrap().to_str().unwrap().starts_with("integration_"))
+                                              .collect();
+
+        for path in paths {
+            remove_file(path.path()).unwrap();
+        }
+    }
 
     #[test]
     fn create_empty_segment_on_new_db() {
@@ -257,6 +313,43 @@ mod tests {
         let db = RustDB::open(STORAGE_TEST_FILE);
 
         let segment = db.segment;
+
+        assert_eq!(segment.closed, true);
+        assert_eq!(segment.size, 69);
+        assert_eq!(segment.previous.is_none(), true);
+    }
+
+    #[test]
+    fn load_segments() {
+        delete_files();
+
+        let db = RustDB::load(STORAGE_TEST_READONLY_FOLDER);
+
+        let segment = &db.segment;
+
+        assert_eq!(segment.closed, true);
+        assert_eq!(segment.size, 154);
+        assert_eq!(segment.previous.is_some(), true);
+
+        let segment = match &segment.previous {
+            None => {
+                assert_eq!(1, 0);
+                return ();
+            },
+            Some(value) => value,
+        };
+
+        assert_eq!(segment.closed, true);
+        assert_eq!(segment.size, 136);
+        assert_eq!(segment.previous.is_some(), true);
+
+        let segment = match &segment.previous {
+            None => {
+                assert_eq!(1, 0);
+                return ();
+            },
+            Some(value) => value,
+        };
 
         assert_eq!(segment.closed, true);
         assert_eq!(segment.size, 69);
