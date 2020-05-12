@@ -1,6 +1,6 @@
-use rustdb::{KeyValue, RustDB};
 use rand::random;
-use std::fs::remove_dir_all;
+use rustdb::{KeyValue, RustDB};
+use std::fs::{read_dir, remove_dir_all};
 
 static STORAGE_TEST_FOLDER: &str = "storage_test";
 static STORAGE_TEST_READONLY_FOLDER: &str = "./readonly_storage_test";
@@ -48,10 +48,22 @@ fn load_folder_and_find_all_records() {
     assert_eq!(data3.is_ok(), true);
     assert_eq!(data4.is_ok(), true);
 
-    validate_value(data1.unwrap(), "{\"email\":\"tiago@test.com\",\"id\":\"1234\",\"name\":\"Tiago\"}");
-    validate_value(data2.unwrap(), "{\"email\":\"glau@test.com\",\"id\":\"1235\",\"name\":\"Glau\"}");
-    validate_value(data3.unwrap(), "{\"email\":\"alice_novo@test.com\",\"id\":\"1236\",\"name\":\"Alice atualizado\"}");
-    validate_value(data4.unwrap(), "{\"email\":\"lucas@test.com\",\"id\":\"1237\",\"name\":\"Lucas\"}");
+    validate_value(
+        data1.unwrap(),
+        "{\"email\":\"tiago@test.com\",\"id\":\"1234\",\"name\":\"Tiago\"}",
+    );
+    validate_value(
+        data2.unwrap(),
+        "{\"email\":\"glau@test.com\",\"id\":\"1235\",\"name\":\"Glau\"}",
+    );
+    validate_value(
+        data3.unwrap(),
+        "{\"email\":\"alice_novo@test.com\",\"id\":\"1236\",\"name\":\"Alice atualizado\"}",
+    );
+    validate_value(
+        data4.unwrap(),
+        "{\"email\":\"lucas@test.com\",\"id\":\"1237\",\"name\":\"Lucas\"}",
+    );
 }
 
 fn validate_value(result: Option<KeyValue>, content: &str) {
@@ -136,6 +148,32 @@ fn open_new_file_and_delete_item() {
 
     let data = data.unwrap();
     assert_eq!(data.is_none(), true);
+
+    remove_dir_all(format!("./{}", path)).unwrap();
+}
+
+#[test]
+fn create_multiple_files() {
+    // arrange
+    let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+
+    let mut db = RustDB::new(path);
+
+    // act
+    for i in 0..200 {
+        db.save_record(KeyValue::new_from_strings(
+            format!("{:04x}", i),
+            format!(
+                "{{\"email\":\"{}@test.com\",\"id\":\"{}\",\"name\":\"nome {}\"}}",
+                i, i, i
+            ),
+        ))
+        .unwrap();
+    }
+
+    // assert
+    let paths = read_dir(path).unwrap();
+    assert_eq!(13, paths.count());
 
     remove_dir_all(format!("./{}", path)).unwrap();
 }

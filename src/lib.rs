@@ -2,11 +2,17 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crc::crc32;
 use rand::random;
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions, read_dir, create_dir_all};
+use std::fs::{create_dir_all, read_dir, File, OpenOptions};
 use std::io::{
     prelude::*, BufReader, Error, ErrorKind, ErrorKind::UnexpectedEof, Result, SeekFrom,
 };
 use std::path::Path;
+
+#[cfg(test)]
+static MAX_SIZE_FILE: u64 = 1_000_000;
+
+#[cfg(not(test))]
+static MAX_SIZE_FILE: u64 = 1_000;
 
 type ByteString = Vec<u8>;
 
@@ -202,31 +208,44 @@ impl DataSgment {
 
         DataSgment::update_index(&mut self.index, &key_value, position);
 
+        self.size = self.database_file.seek(SeekFrom::End(0))?;
+
         Ok(())
+    }
+
+    fn set_previous(&mut self, segment: Option<DataSgment>) {
+        if let Some(mut value) = segment {
+            value.closed = true;
+            self.previous.replace(Box::from(value));
+        }
     }
 }
 
 pub struct RustDB {
-    segment: DataSgment,
+    segment: Option<DataSgment>,
+    folder: String,
 }
 
 impl RustDB {
     pub fn open(file_name: &str) -> RustDB {
         RustDB {
-            segment: DataSgment::open(file_name),
+            segment: Some(DataSgment::open(file_name)),
+            folder: String::from(file_name),
         }
     }
 
     pub fn new(folder: &str) -> RustDB {
         RustDB {
-            segment: DataSgment::new(folder),
+            segment: Some(DataSgment::new(folder)),
+            folder: String::from(folder),
         }
     }
 
-    pub fn load(folder: &str)  -> RustDB {
-        let mut paths: Vec<_> = read_dir(format!("./{}", folder)).unwrap()
-                                              .map(|r| r.unwrap())
-                                              .collect();
+    pub fn load(folder: &str) -> RustDB {
+        let mut paths: Vec<_> = read_dir(format!("./{}", folder))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
 
         paths.sort_by_key(|dir| dir.metadata().unwrap().created().unwrap());
 
@@ -248,12 +267,16 @@ impl RustDB {
         };
 
         RustDB {
-            segment
+            segment: Some(segment),
+            folder: String::from(folder),
         }
     }
 
     pub fn get_record(&self, key: String) -> Result<Option<KeyValue>> {
-        self.get_record_from_segment(&key, &self.segment)
+        match &self.segment {
+            Some(value) => self.get_record_from_segment(&key, value),
+            None => return Ok(None),
+        }
     }
 
     fn get_record_from_segment(&self, key: &str, segment: &DataSgment) -> Result<Option<KeyValue>> {
@@ -271,11 +294,27 @@ impl RustDB {
     }
 
     pub fn delete_record(&mut self, key: String) -> Result<()> {
-        self.segment.delete_record(key)
+        match &mut self.segment {
+            Some(value) => value.delete_record(key),
+            None => return Ok(()),
+        }
     }
 
     pub fn save_record(&mut self, key_value: KeyValue) -> Result<()> {
-        self.segment.save_record(key_value)
+        match &mut self.segment {
+            Some(value) => {
+                value.save_record(key_value)?;
+
+                if value.size > MAX_SIZE_FILE {
+                    let new_segment = DataSgment::new(&self.folder);
+                    let current_segment = self.segment.replace(new_segment);
+                    self.segment.as_mut().unwrap().set_previous(current_segment);
+                }
+            }
+            None => return Ok(()),
+        };
+
+        Ok(())
     }
 }
 
@@ -294,7 +333,7 @@ mod tests {
 
         let db = RustDB::new(path);
 
-        let segment = db.segment;
+        let segment = db.segment.unwrap();
 
         assert_eq!(segment.closed, false);
         assert_eq!(segment.size, 0);
@@ -307,7 +346,7 @@ mod tests {
     fn open_existing_segment() {
         let db = RustDB::open(STORAGE_TEST_FILE);
 
-        let segment = db.segment;
+        let segment = db.segment.unwrap();
 
         assert_eq!(segment.closed, true);
         assert_eq!(segment.size, 69);
@@ -315,10 +354,30 @@ mod tests {
     }
 
     #[test]
+    fn update_size_on_save_data() {
+        let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+
+        let mut db = RustDB::new(path);
+        db.save_record(KeyValue::new_from_strings(
+            String::from("123"),
+            String::from("{\"id\":\"123\",\"name\":\"test\"}"),
+        ))
+        .unwrap();
+
+        let segment = db.segment.unwrap();
+
+        assert_eq!(segment.closed, false);
+        assert_eq!(segment.size, 41);
+        assert_eq!(segment.previous.is_none(), true);
+
+        remove_dir_all(format!("./{}", path)).unwrap();
+    }
+
+    #[test]
     fn load_segments() {
         let db = RustDB::load(STORAGE_TEST_READONLY_FOLDER);
 
-        let segment = &db.segment;
+        let segment = &db.segment.unwrap();
 
         assert_eq!(segment.closed, true);
         assert_eq!(segment.size, 154);
@@ -328,7 +387,7 @@ mod tests {
             None => {
                 assert_eq!(1, 0);
                 return ();
-            },
+            }
             Some(value) => value,
         };
 
@@ -340,7 +399,7 @@ mod tests {
             None => {
                 assert_eq!(1, 0);
                 return ();
-            },
+            }
             Some(value) => value,
         };
 
