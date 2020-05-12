@@ -18,4 +18,4 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "rustdb_rest"
-path = "src/bin/main.rs"
+path = "src/rest_api.rs"
