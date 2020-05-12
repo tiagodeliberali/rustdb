@@ -1,4 +1,3 @@
 /target
 /jmeter
-/storage
-/storage_test*
+/storage*

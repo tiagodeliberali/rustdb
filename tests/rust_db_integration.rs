@@ -177,3 +177,70 @@ fn create_multiple_files() {
 
     remove_dir_all(format!("./{}", path)).unwrap();
 }
+
+#[test]
+fn read_from_multiple_files() {
+    // arrange
+    let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+
+    let mut db = RustDB::new(path);
+
+    // act
+    for i in 0..80 {
+        db.save_record(KeyValue::new_from_strings(
+            format!("{:04}", i),
+            format!(
+                "{{\"email\":\"{}@test1.com\",\"id\":\"{}\",\"name\":\"nome {}\"}}",
+                i, i, i
+            ),
+        ))
+        .unwrap();
+    }
+
+    for i in 40..160 {
+        db.save_record(KeyValue::new_from_strings(
+            format!("{:04}", i),
+            format!(
+                "{{\"email\":\"{}@test2.com\",\"id\":\"{}\",\"name\":\"nome {}\"}}",
+                i, i, i
+            ),
+        ))
+        .unwrap();
+    }
+
+    for i in 60..120 {
+        db.save_record(KeyValue::new_from_strings(
+            format!("{:04}", i),
+            format!(
+                "{{\"email\":\"{}@test3.com\",\"id\":\"{}\",\"name\":\"nome {}\"}}",
+                i, i, i
+            ),
+        ))
+        .unwrap();
+    }
+
+    // assert
+    let data1 = db.get_record(String::from("0001"));
+    let data2 = db.get_record(String::from("0050"));
+    let data3 = db.get_record(String::from("0080"));
+    let data4 = db.get_record(String::from("0130"));
+
+    validate_value(
+        data1.unwrap(),
+        "{\"email\":\"1@test1.com\",\"id\":\"1\",\"name\":\"nome 1\"}",
+    );
+    validate_value(
+        data2.unwrap(),
+        "{\"email\":\"50@test2.com\",\"id\":\"50\",\"name\":\"nome 50\"}",
+    );
+    validate_value(
+        data3.unwrap(),
+        "{\"email\":\"80@test3.com\",\"id\":\"80\",\"name\":\"nome 80\"}",
+    );
+    validate_value(
+        data4.unwrap(),
+        "{\"email\":\"130@test2.com\",\"id\":\"130\",\"name\":\"nome 130\"}",
+    );
+
+    remove_dir_all(format!("./{}", path)).unwrap();
+}
