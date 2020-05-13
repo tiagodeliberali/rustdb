@@ -72,7 +72,7 @@ impl RustDB {
                     return Ok(result);
                 }
                 return Ok(None);
-            },
+            }
             None => return Ok(None),
         }
     }

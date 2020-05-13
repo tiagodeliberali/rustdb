@@ -272,7 +272,7 @@ fn delete_item_that_exists_on_previous_segment() {
 
     // assert
     let paths = read_dir(path).unwrap();
-    assert!(paths.count() > 1);  // check if we have more than on file
+    assert!(paths.count() > 1); // check if we have more than on file
 
     assert!(result.is_none());
 
