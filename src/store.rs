@@ -236,11 +236,12 @@ mod tests {
         let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
 
         let mut segment = DataSgment::new(path);
-        segment.save_record(KeyValue::new_from_strings(
-            String::from("123"),
-            String::from("{\"id\":\"123\",\"name\":\"test\"}"),
-        ))
-        .unwrap();
+        segment
+            .save_record(KeyValue::new_from_strings(
+                String::from("123"),
+                String::from("{\"id\":\"123\",\"name\":\"test\"}"),
+            ))
+            .unwrap();
 
         assert!(!segment.closed);
         assert_eq!(segment.size, 41);
