@@ -244,3 +244,37 @@ fn read_from_multiple_files() {
 
     remove_dir_all(format!("./{}", path)).unwrap();
 }
+
+#[test]
+fn delete_item_that_exists_on_previous_segment() {
+    // arrange
+    let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+
+    let mut db = RustDB::new(path);
+
+    // create enough records to have more than on file
+    for i in 0..30 {
+        db.save_record(KeyValue::new_from_strings(
+            format!("{:04}", i),
+            format!(
+                "{{\"email\":\"{}@test.com\",\"id\":\"{}\",\"name\":\"nome {}\"}}",
+                i, i, i
+            ),
+        ))
+        .unwrap();
+    }
+
+    // remove a record from first file
+    db.delete_record(String::from("0001")).unwrap();
+
+    // act
+    let result = db.get_record(String::from("0001")).unwrap();
+
+    // assert
+    let paths = read_dir(path).unwrap();
+    assert!(paths.count() > 1);  // check if we have more than on file
+
+    assert!(result.is_none());
+
+    remove_dir_all(format!("./{}", path)).unwrap();
+}

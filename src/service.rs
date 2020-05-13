@@ -63,7 +63,16 @@ impl RustDB {
 
     pub fn get_record(&self, key: String) -> Result<Option<KeyValue>> {
         match &self.segment {
-            Some(value) => self.get_record_from_segment(&key, value),
+            Some(value) => {
+                let result = self.get_record_from_segment(&key, value)?;
+                if let Some(v) = &result {
+                    if v.get_value_as_string().len() == 0 {
+                        return Ok(None);
+                    }
+                    return Ok(result);
+                }
+                return Ok(None);
+            },
             None => return Ok(None),
         }
     }

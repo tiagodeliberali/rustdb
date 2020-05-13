@@ -107,11 +107,7 @@ impl DataSgment {
     }
 
     fn update_index(index: &mut HashMap<ByteString, u64>, key_value: &KeyValue, position: u64) {
-        if key_value.value.len() == 0 && index.contains_key(&key_value.key) {
-            index.remove(&key_value.key);
-        } else {
-            index.insert(key_value.key.to_owned(), position);
-        }
+        index.insert(key_value.key.to_owned(), position);
     }
 
     fn load_record(file: &mut BufReader<&File>) -> Result<KeyValue> {
