@@ -204,7 +204,6 @@ impl DataSgment {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::random;
     use std::fs::remove_dir_all;
 
     static STORAGE_TEST_FOLDER: &str = "storage_test_";
