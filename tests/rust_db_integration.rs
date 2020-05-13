@@ -18,10 +18,10 @@ fn open_existing_segment_and_find_record() {
     let data = db.get_record(String::from("1234"));
 
     // assert
-    assert_eq!(data.is_ok(), true);
+    assert!(data.is_ok());
 
     let data = data.unwrap();
-    assert_eq!(data.is_some(), true);
+    assert!(data.is_some());
 
     let data = data.unwrap();
     assert_eq!(data.get_key_as_string(), "1234");
@@ -43,10 +43,10 @@ fn load_folder_and_find_all_records() {
     let data4 = db.get_record(String::from("1237"));
 
     // assert
-    assert_eq!(data1.is_ok(), true);
-    assert_eq!(data2.is_ok(), true);
-    assert_eq!(data3.is_ok(), true);
-    assert_eq!(data4.is_ok(), true);
+    assert!(data1.is_ok());
+    assert!(data2.is_ok());
+    assert!(data3.is_ok());
+    assert!(data4.is_ok());
 
     validate_value(
         data1.unwrap(),
@@ -87,10 +87,10 @@ fn open_new_file_and_add_item() {
 
     // assert
     let data = db.get_record(String::from(KEY));
-    assert_eq!(data.is_ok(), true);
+    assert!(data.is_ok());
 
     let data = data.unwrap();
-    assert_eq!(data.is_some(), true);
+    assert!(data.is_some());
 
     let data = data.unwrap();
     assert_eq!(data.get_key_as_string(), KEY);
@@ -118,10 +118,10 @@ fn open_new_file_and_update_item() {
 
     // assert
     let data = db.get_record(String::from(KEY));
-    assert_eq!(data.is_ok(), true);
+    assert!(data.is_ok());
 
     let data = data.unwrap();
-    assert_eq!(data.is_some(), true);
+    assert!(data.is_some());
 
     let data = data.unwrap();
     assert_eq!(data.get_key_as_string(), KEY);
@@ -144,10 +144,10 @@ fn open_new_file_and_delete_item() {
 
     // assert
     let data = db.get_record(String::from(KEY));
-    assert_eq!(data.is_ok(), true);
+    assert!(data.is_ok());
 
     let data = data.unwrap();
-    assert_eq!(data.is_none(), true);
+    assert!(data.is_none());
 
     remove_dir_all(format!("./{}", path)).unwrap();
 }

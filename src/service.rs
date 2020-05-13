@@ -119,9 +119,9 @@ mod tests {
 
         let segment = &db.segment.unwrap();
 
-        assert_eq!(segment.is_closed(), true);
+        assert!(segment.is_closed());
         assert_eq!(segment.get_size(), 154);
-        assert_eq!(segment.get_previous().is_some(), true);
+        assert!(segment.get_previous().is_some());
 
         let segment = match segment.get_previous() {
             None => {
@@ -131,9 +131,9 @@ mod tests {
             Some(value) => value,
         };
 
-        assert_eq!(segment.is_closed(), true);
+        assert!(segment.is_closed());
         assert_eq!(segment.get_size(), 136);
-        assert_eq!(segment.get_previous().is_some(), true);
+        assert!(segment.get_previous().is_some());
 
         let segment = match segment.get_previous() {
             None => {
@@ -143,8 +143,8 @@ mod tests {
             Some(value) => value,
         };
 
-        assert_eq!(segment.is_closed(), true);
+        assert!(segment.is_closed());
         assert_eq!(segment.get_size(), 69);
-        assert_eq!(segment.get_previous().is_none(), true);
+        assert!(segment.get_previous().is_none());
     }
 }

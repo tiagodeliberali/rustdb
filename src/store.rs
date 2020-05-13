@@ -215,9 +215,9 @@ mod tests {
 
         let segment = DataSgment::new(path);
 
-        assert_eq!(segment.closed, false);
+        assert!(!segment.closed);
         assert_eq!(segment.size, 0);
-        assert_eq!(segment.previous.is_none(), true);
+        assert!(segment.previous.is_none());
 
         remove_dir_all(format!("./{}", path)).unwrap();
     }
@@ -226,9 +226,9 @@ mod tests {
     fn open_existing_segment() {
         let segment = DataSgment::open(STORAGE_TEST_FILE);
 
-        assert_eq!(segment.closed, true);
+        assert!(segment.closed);
         assert_eq!(segment.size, 69);
-        assert_eq!(segment.previous.is_none(), true);
+        assert!(segment.previous.is_none());
     }
 
     #[test]
@@ -242,9 +242,9 @@ mod tests {
         ))
         .unwrap();
 
-        assert_eq!(segment.closed, false);
+        assert!(!segment.closed);
         assert_eq!(segment.size, 41);
-        assert_eq!(segment.previous.is_none(), true);
+        assert!(segment.previous.is_none());
 
         remove_dir_all(format!("./{}", path)).unwrap();
     }
