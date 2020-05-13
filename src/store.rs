@@ -13,12 +13,24 @@ use crate::core::{ByteString, KeyValue};
 pub struct DataSgment {
     database_file: File,
     index: HashMap<ByteString, u64>,
-    pub closed: bool,
-    pub previous: Option<Box<DataSgment>>,
-    pub size: u64,
+    closed: bool,
+    previous: Option<Box<DataSgment>>,
+    size: u64,
 }
 
 impl DataSgment {
+    pub fn get_size(&self) -> u64 {
+        self.size
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.closed
+    }
+
+    pub fn get_previous(&self) -> &Option<Box<DataSgment>> {
+        &self.previous
+    }
+
     pub fn new(folder: &str) -> DataSgment {
         create_dir_all(format!("./{}", folder)).unwrap();
 
@@ -186,5 +198,55 @@ impl DataSgment {
             value.closed = true;
             self.previous.replace(Box::from(value));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::random;
+    use std::fs::remove_dir_all;
+
+    static STORAGE_TEST_FOLDER: &str = "storage_test_";
+    static STORAGE_TEST_FILE: &str = "./readonly_storage_test/integration_current_db";
+
+    #[test]
+    fn create_empty_segment_on_new_db() {
+        let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+
+        let segment = DataSgment::new(path);
+
+        assert_eq!(segment.closed, false);
+        assert_eq!(segment.size, 0);
+        assert_eq!(segment.previous.is_none(), true);
+
+        remove_dir_all(format!("./{}", path)).unwrap();
+    }
+
+    #[test]
+    fn open_existing_segment() {
+        let segment = DataSgment::open(STORAGE_TEST_FILE);
+
+        assert_eq!(segment.closed, true);
+        assert_eq!(segment.size, 69);
+        assert_eq!(segment.previous.is_none(), true);
+    }
+
+    #[test]
+    fn update_size_on_save_data() {
+        let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+
+        let mut segment = DataSgment::new(path);
+        segment.save_record(KeyValue::new_from_strings(
+            String::from("123"),
+            String::from("{\"id\":\"123\",\"name\":\"test\"}"),
+        ))
+        .unwrap();
+
+        assert_eq!(segment.closed, false);
+        assert_eq!(segment.size, 41);
+        assert_eq!(segment.previous.is_none(), true);
+
+        remove_dir_all(format!("./{}", path)).unwrap();
     }
 }

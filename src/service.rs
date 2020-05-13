@@ -44,7 +44,7 @@ impl RustDB {
             segment = match segment {
                 None => Some(current),
                 Some(value) => {
-                    current.previous = Some(Box::from(value));
+                    current.set_previous(Some(value));
                     Some(current)
                 }
             }
@@ -74,7 +74,7 @@ impl RustDB {
         match record {
             Some(_) => return Ok(record),
             None => {
-                if let Some(next) = &segment.previous {
+                if let Some(next) = segment.get_previous() {
                     return self.get_record_from_segment(key, &next);
                 }
                 return Ok(None);
@@ -94,7 +94,7 @@ impl RustDB {
             Some(value) => {
                 value.save_record(key_value)?;
 
-                if value.size > MAX_SIZE_FILE {
+                if value.get_size() > MAX_SIZE_FILE {
                     let new_segment = DataSgment::new(&self.folder);
                     let current_segment = self.segment.replace(new_segment);
                     self.segment.as_mut().unwrap().set_previous(current_segment);
@@ -110,58 +110,8 @@ impl RustDB {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::random;
-    use std::fs::remove_dir_all;
 
-    static STORAGE_TEST_FOLDER: &str = "storage_test_";
     static STORAGE_TEST_READONLY_FOLDER: &str = "./readonly_storage_test";
-    static STORAGE_TEST_FILE: &str = "./readonly_storage_test/integration_current_db";
-
-    #[test]
-    fn create_empty_segment_on_new_db() {
-        let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
-
-        let db = RustDB::new(path);
-
-        let segment = db.segment.unwrap();
-
-        assert_eq!(segment.closed, false);
-        assert_eq!(segment.size, 0);
-        assert_eq!(segment.previous.is_none(), true);
-
-        remove_dir_all(format!("./{}", path)).unwrap();
-    }
-
-    #[test]
-    fn open_existing_segment() {
-        let db = RustDB::open(STORAGE_TEST_FILE);
-
-        let segment = db.segment.unwrap();
-
-        assert_eq!(segment.closed, true);
-        assert_eq!(segment.size, 69);
-        assert_eq!(segment.previous.is_none(), true);
-    }
-
-    #[test]
-    fn update_size_on_save_data() {
-        let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
-
-        let mut db = RustDB::new(path);
-        db.save_record(KeyValue::new_from_strings(
-            String::from("123"),
-            String::from("{\"id\":\"123\",\"name\":\"test\"}"),
-        ))
-        .unwrap();
-
-        let segment = db.segment.unwrap();
-
-        assert_eq!(segment.closed, false);
-        assert_eq!(segment.size, 41);
-        assert_eq!(segment.previous.is_none(), true);
-
-        remove_dir_all(format!("./{}", path)).unwrap();
-    }
 
     #[test]
     fn load_segments() {
@@ -169,11 +119,11 @@ mod tests {
 
         let segment = &db.segment.unwrap();
 
-        assert_eq!(segment.closed, true);
-        assert_eq!(segment.size, 154);
-        assert_eq!(segment.previous.is_some(), true);
+        assert_eq!(segment.is_closed(), true);
+        assert_eq!(segment.get_size(), 154);
+        assert_eq!(segment.get_previous().is_some(), true);
 
-        let segment = match &segment.previous {
+        let segment = match segment.get_previous() {
             None => {
                 assert_eq!(1, 0);
                 return ();
@@ -181,11 +131,11 @@ mod tests {
             Some(value) => value,
         };
 
-        assert_eq!(segment.closed, true);
-        assert_eq!(segment.size, 136);
-        assert_eq!(segment.previous.is_some(), true);
+        assert_eq!(segment.is_closed(), true);
+        assert_eq!(segment.get_size(), 136);
+        assert_eq!(segment.get_previous().is_some(), true);
 
-        let segment = match &segment.previous {
+        let segment = match segment.get_previous() {
             None => {
                 assert_eq!(1, 0);
                 return ();
@@ -193,8 +143,8 @@ mod tests {
             Some(value) => value,
         };
 
-        assert_eq!(segment.closed, true);
-        assert_eq!(segment.size, 69);
-        assert_eq!(segment.previous.is_none(), true);
+        assert_eq!(segment.is_closed(), true);
+        assert_eq!(segment.get_size(), 69);
+        assert_eq!(segment.get_previous().is_none(), true);
     }
 }
