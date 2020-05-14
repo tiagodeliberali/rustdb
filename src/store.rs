@@ -47,14 +47,6 @@ impl DataSgment {
         }
     }
 
-    pub fn get_size(&self) -> u64 {
-        self.size
-    }
-
-    pub fn get_previous(&self) -> &Option<Box<DataSgment>> {
-        &self.previous
-    }
-
     pub fn new(folder: &str) -> DataSgment {
         create_dir_all(format!("./{}", folder)).unwrap();
 
@@ -211,6 +203,14 @@ impl DataSgment {
         self.size = self.database_file.seek(SeekFrom::End(0))?;
 
         Ok(())
+    }
+
+    pub fn get_size(&self) -> u64 {
+        self.size
+    }
+
+    pub fn get_previous(&self) -> &Option<Box<DataSgment>> {
+        &self.previous
     }
 
     pub fn set_previous(&mut self, segment: Option<DataSgment>) {
