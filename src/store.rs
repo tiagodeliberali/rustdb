@@ -41,10 +41,13 @@ impl DataSgment {
             }
         }
 
-        match segment {
-            None => DataSgment::new(folder),
-            Some(value) => value,
+        let mut current_segment = DataSgment::new(folder);
+
+        if let Some(value) = segment {
+            current_segment.previous.replace(Box::from(value));
         }
+
+        current_segment
     }
 
     pub fn new(folder: &str) -> DataSgment {
@@ -275,13 +278,26 @@ mod tests {
     fn load_segments() {
         let segment = DataSgment::load_dir(STORAGE_TEST_READONLY_FOLDER);
 
+        // first segment is always a neew open one
+        assert!(!segment.closed);
+        assert_eq!(segment.get_size(), 0);
+        assert!(segment.get_previous().is_some());
+
+        let segment = match segment.get_previous() {
+            None => {
+                assert!(false);
+                return ();
+            }
+            Some(value) => value,
+        };
+
         assert!(segment.closed);
         assert_eq!(segment.get_size(), 154);
         assert!(segment.get_previous().is_some());
 
         let segment = match segment.get_previous() {
             None => {
-                assert_eq!(1, 0);
+                assert!(false);
                 return ();
             }
             Some(value) => value,
@@ -293,7 +309,7 @@ mod tests {
 
         let segment = match segment.get_previous() {
             None => {
-                assert_eq!(1, 0);
+                assert!(false);
                 return ();
             }
             Some(value) => value,
