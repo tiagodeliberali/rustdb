@@ -4,7 +4,6 @@ use std::fs::{read_dir, remove_dir_all};
 
 static STORAGE_TEST_FOLDER: &str = "storage_test";
 static STORAGE_TEST_READONLY_FOLDER: &str = "./readonly_storage_test";
-static STORAGE_TEST_FILE: &str = "./readonly_storage_test/integration_current_db";
 
 static KEY: &str = "ABC";
 static VALUE: &str = "{\"id\":\"ABC\",\"name\":\"Tiago\"}";
@@ -12,7 +11,7 @@ static VALUE: &str = "{\"id\":\"ABC\",\"name\":\"Tiago\"}";
 #[test]
 fn open_existing_segment_and_find_record() {
     // arrange
-    let db = RustDB::open(STORAGE_TEST_FILE);
+    let db = RustDB::load(STORAGE_TEST_READONLY_FOLDER);
 
     // act
     let data = db.get_record(String::from("1234"));
@@ -74,12 +73,16 @@ fn validate_value(result: Option<KeyValue>, content: &str) {
     }
 }
 
+fn folder_name() -> String {
+    format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>())
+}
+
 #[test]
 fn open_new_file_and_add_item() {
     // arrange
-    let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+    let path = &folder_name();
 
-    let mut db = RustDB::new(path);
+    let mut db = RustDB::load(path);
     let key_value = KeyValue::new_from_strings(String::from(KEY), String::from(VALUE));
 
     // act
@@ -102,12 +105,12 @@ fn open_new_file_and_add_item() {
 #[test]
 fn open_new_file_and_update_item() {
     // arrange
-    let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+    let path = &&folder_name();
 
     let updated_value =
         "{\"email\":\"tiago@test.com\",\"id\":\"1234\",\"name\":\"Tiago updated name\"}";
 
-    let mut db = RustDB::new(path);
+    let mut db = RustDB::load(path);
     let key_value_original = KeyValue::new_from_strings(String::from(KEY), String::from(VALUE));
     let key_value_updated =
         KeyValue::new_from_strings(String::from(KEY), String::from(updated_value));
@@ -133,9 +136,9 @@ fn open_new_file_and_update_item() {
 #[test]
 fn open_new_file_and_delete_item() {
     // arrange
-    let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+    let path = &&folder_name();
 
-    let mut db = RustDB::new(path);
+    let mut db = RustDB::load(path);
     let key_value = KeyValue::new_from_strings(String::from(KEY), String::from(VALUE));
 
     // act
@@ -155,9 +158,9 @@ fn open_new_file_and_delete_item() {
 #[test]
 fn create_multiple_files() {
     // arrange
-    let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+    let path = &&folder_name();
 
-    let mut db = RustDB::new(path);
+    let mut db = RustDB::load(path);
 
     // act
     for i in 0..200 {
@@ -181,9 +184,9 @@ fn create_multiple_files() {
 #[test]
 fn read_from_multiple_files() {
     // arrange
-    let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+    let path = &&folder_name();
 
-    let mut db = RustDB::new(path);
+    let mut db = RustDB::load(path);
 
     // act
     for i in 0..80 {
@@ -248,9 +251,9 @@ fn read_from_multiple_files() {
 #[test]
 fn delete_item_that_exists_on_previous_segment() {
     // arrange
-    let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+    let path = &&folder_name();
 
-    let mut db = RustDB::new(path);
+    let mut db = RustDB::load(path);
 
     // create enough records to have more than on file
     for i in 0..30 {

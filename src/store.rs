@@ -2,7 +2,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crc::crc32;
 use rand::random;
 use std::collections::HashMap;
-use std::fs::{create_dir_all, File, OpenOptions};
+use std::fs::{create_dir_all, read_dir, File, OpenOptions};
 use std::io::{
     prelude::*, BufReader, Error, ErrorKind, ErrorKind::UnexpectedEof, Result, SeekFrom,
 };
@@ -19,12 +19,36 @@ pub struct DataSgment {
 }
 
 impl DataSgment {
-    pub fn get_size(&self) -> u64 {
-        self.size
+    pub fn load_dir(folder: &str) -> DataSgment {
+        create_dir_all(format!("./{}", folder)).unwrap();
+
+        let mut paths: Vec<_> = read_dir(format!("./{}", folder))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect();
+
+        paths.sort_by_key(|dir| dir.metadata().unwrap().created().unwrap());
+
+        let mut segment = None;
+        for path in paths {
+            let mut current = DataSgment::open(path.path().to_str().unwrap());
+            segment = match segment {
+                None => Some(current),
+                Some(value) => {
+                    current.set_previous(Some(value));
+                    Some(current)
+                }
+            }
+        }
+
+        match segment {
+            None => DataSgment::new(folder),
+            Some(value) => value,
+        }
     }
 
-    pub fn is_closed(&self) -> bool {
-        self.closed
+    pub fn get_size(&self) -> u64 {
+        self.size
     }
 
     pub fn get_previous(&self) -> &Option<Box<DataSgment>> {
@@ -203,6 +227,7 @@ mod tests {
     use std::fs::remove_dir_all;
 
     static STORAGE_TEST_FOLDER: &str = "storage_test_";
+    static STORAGE_TEST_READONLY_FOLDER: &str = "./readonly_storage_test";
     static STORAGE_TEST_FILE: &str = "./readonly_storage_test/integration_current_db";
 
     #[test]
@@ -244,5 +269,38 @@ mod tests {
         assert!(segment.previous.is_none());
 
         remove_dir_all(format!("./{}", path)).unwrap();
+    }
+
+    #[test]
+    fn load_segments() {
+        let segment = DataSgment::load_dir(STORAGE_TEST_READONLY_FOLDER);
+
+        assert!(segment.closed);
+        assert_eq!(segment.get_size(), 154);
+        assert!(segment.get_previous().is_some());
+
+        let segment = match segment.get_previous() {
+            None => {
+                assert_eq!(1, 0);
+                return ();
+            }
+            Some(value) => value,
+        };
+
+        assert!(segment.closed);
+        assert_eq!(segment.get_size(), 136);
+        assert!(segment.get_previous().is_some());
+
+        let segment = match segment.get_previous() {
+            None => {
+                assert_eq!(1, 0);
+                return ();
+            }
+            Some(value) => value,
+        };
+
+        assert!(segment.closed);
+        assert_eq!(segment.get_size(), 69);
+        assert!(segment.get_previous().is_none());
     }
 }

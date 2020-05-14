@@ -1,4 +1,3 @@
-use std::fs::read_dir;
 use std::io::Result;
 
 use crate::core::KeyValue;
@@ -16,47 +15,9 @@ pub struct RustDB {
 }
 
 impl RustDB {
-    pub fn open(file_name: &str) -> RustDB {
-        RustDB {
-            segment: Some(DataSgment::open(file_name)),
-            folder: String::from(file_name),
-        }
-    }
-
-    pub fn new(folder: &str) -> RustDB {
-        RustDB {
-            segment: Some(DataSgment::new(folder)),
-            folder: String::from(folder),
-        }
-    }
-
     pub fn load(folder: &str) -> RustDB {
-        let mut paths: Vec<_> = read_dir(format!("./{}", folder))
-            .unwrap()
-            .map(|r| r.unwrap())
-            .collect();
-
-        paths.sort_by_key(|dir| dir.metadata().unwrap().created().unwrap());
-
-        let mut segment = None;
-        for path in paths {
-            let mut current = DataSgment::open(path.path().to_str().unwrap());
-            segment = match segment {
-                None => Some(current),
-                Some(value) => {
-                    current.set_previous(Some(value));
-                    Some(current)
-                }
-            }
-        }
-
-        let segment = match segment {
-            None => DataSgment::new(folder),
-            Some(value) => value,
-        };
-
         RustDB {
-            segment: Some(segment),
+            segment: Some(DataSgment::load_dir(folder)),
             folder: String::from(folder),
         }
     }
@@ -113,47 +74,5 @@ impl RustDB {
         };
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    static STORAGE_TEST_READONLY_FOLDER: &str = "./readonly_storage_test";
-
-    #[test]
-    fn load_segments() {
-        let db = RustDB::load(STORAGE_TEST_READONLY_FOLDER);
-
-        let segment = &db.segment.unwrap();
-
-        assert!(segment.is_closed());
-        assert_eq!(segment.get_size(), 154);
-        assert!(segment.get_previous().is_some());
-
-        let segment = match segment.get_previous() {
-            None => {
-                assert_eq!(1, 0);
-                return ();
-            }
-            Some(value) => value,
-        };
-
-        assert!(segment.is_closed());
-        assert_eq!(segment.get_size(), 136);
-        assert!(segment.get_previous().is_some());
-
-        let segment = match segment.get_previous() {
-            None => {
-                assert_eq!(1, 0);
-                return ();
-            }
-            Some(value) => value,
-        };
-
-        assert!(segment.is_closed());
-        assert_eq!(segment.get_size(), 69);
-        assert!(segment.get_previous().is_none());
     }
 }
