@@ -1,6 +1,5 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use crc::crc32;
-use rand::random;
 use std::collections::HashMap;
 use std::fs::{create_dir_all, read_dir, File, OpenOptions};
 use std::io::{
@@ -16,7 +15,7 @@ pub struct DataSgment {
     closed: bool,
     previous: Option<Box<DataSgment>>,
     size: u64,
-    name: String,
+    position: u64,
 }
 
 impl DataSgment {
@@ -28,7 +27,7 @@ impl DataSgment {
             .map(|r| r.unwrap())
             .collect();
 
-        paths.sort_by_key(|dir| dir.metadata().unwrap().created().unwrap());
+        paths.sort_by_key(|dir| dir.file_name());
 
         let mut segment = None;
         for path in paths {
@@ -42,7 +41,12 @@ impl DataSgment {
             }
         }
 
-        let mut current_segment = DataSgment::new(folder);
+        let position: u64 = match &segment {
+            Some(s) => s.get_position() + 1,
+            None => 1,
+        };
+
+        let mut current_segment = DataSgment::new(folder, position);
 
         if let Some(value) = segment {
             current_segment.previous.replace(Box::from(value));
@@ -51,17 +55,15 @@ impl DataSgment {
         current_segment
     }
 
-    pub fn new(folder: &str) -> DataSgment {
+    pub fn new(folder: &str, position: u64) -> DataSgment {
         create_dir_all(format!("./{}", folder)).unwrap();
-
-        let file_name = format!("current_db_{}", random::<u64>());
 
         let database_file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .append(true)
-            .open(Path::new(&format!("./{}/{}", folder, file_name)))
+            .open(Path::new(&format!("./{}/{:016x}", folder, position)))
             .unwrap();
 
         let mut buffer = BufReader::new(&database_file);
@@ -73,17 +75,19 @@ impl DataSgment {
             closed: false,
             previous: None,
             size,
-            name: file_name,
+            position,
         }
     }
 
     pub fn open(file_name: &str) -> DataSgment {
+        let path = Path::new(file_name);
+
         let database_file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .append(true)
-            .open(Path::new(file_name))
+            .open(path)
             .unwrap();
 
         let mut buffer = BufReader::new(&database_file);
@@ -95,7 +99,13 @@ impl DataSgment {
             closed: true,
             previous: None,
             size,
-            name: String::from(file_name),
+            position: path
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .to_string()
+                .parse::<u64>()
+                .unwrap(),
         };
 
         segment.load().unwrap();
@@ -213,6 +223,10 @@ impl DataSgment {
         self.size
     }
 
+    pub fn get_position(&self) -> u64 {
+        self.position
+    }
+
     pub fn get_previous(&self) -> &Option<Box<DataSgment>> {
         &self.previous
     }
@@ -228,21 +242,19 @@ impl DataSgment {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::remove_dir_all;
-
-    static STORAGE_TEST_FOLDER: &str = "storage_test_";
-    static STORAGE_TEST_READONLY_FOLDER: &str = "./readonly_storage_test";
-    static STORAGE_TEST_FILE: &str = "./readonly_storage_test/integration_current_db";
+    use rand::random;
+    use std::fs::{copy, remove_dir_all};
+    use std::{thread, time};
 
     fn get_folder_name() -> String {
-        format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>())
+        format!("storage_test_{}", random::<u64>())
     }
 
     #[test]
     fn create_empty_segment_on_new_db() {
         let path = &get_folder_name();
 
-        let segment = DataSgment::new(path);
+        let segment = DataSgment::new(path, 1);
 
         assert!(!segment.closed);
         assert_eq!(segment.size, 0);
@@ -253,7 +265,7 @@ mod tests {
 
     #[test]
     fn open_existing_segment() {
-        let segment = DataSgment::open(STORAGE_TEST_FILE);
+        let segment = DataSgment::open("./readonly_storage_test/1");
 
         assert!(segment.closed);
         assert_eq!(segment.size, 69);
@@ -264,7 +276,7 @@ mod tests {
     fn update_size_on_save_data() {
         let path = &get_folder_name();
 
-        let mut segment = DataSgment::new(path);
+        let mut segment = DataSgment::new(path, 1);
         segment
             .save_record(KeyValue::new_from_strings(
                 String::from("123"),
@@ -281,7 +293,16 @@ mod tests {
 
     #[test]
     fn load_segments() {
-        let segment = DataSgment::load_dir(STORAGE_TEST_READONLY_FOLDER);
+        let path = &get_folder_name();
+        create_dir_all(format!("./{}", path)).unwrap();
+
+        copy("./readonly_storage_test/1", format!("./{}/1", path)).unwrap();
+
+        copy("./readonly_storage_test/2", format!("./{}/2", path)).unwrap();
+
+        copy("./readonly_storage_test/3", format!("./{}/3", path)).unwrap();
+
+        let segment = DataSgment::load_dir(path);
 
         // first segment is always a neew open one
         assert!(!segment.closed);
@@ -323,21 +344,35 @@ mod tests {
         assert!(segment.closed);
         assert_eq!(segment.get_size(), 69);
         assert!(segment.get_previous().is_none());
+
+        remove_dir_all(format!("./{}", path)).unwrap();
     }
 
     #[test]
     fn load_files_in_order() {
         let path = &get_folder_name();
+        create_dir_all(format!("./{}", path)).unwrap();
 
-        File::create(format!("{}/current_db_3", path)).unwrap();
+        File::create(format!("{}/3", path)).unwrap();
+        thread::sleep(time::Duration::from_millis(10));
 
-        File::create(format!("{}/current_db_1", path)).unwrap();
+        File::create(format!("{}/1", path)).unwrap();
+        thread::sleep(time::Duration::from_millis(10));
 
-        File::create(format!("{}/current_db_2", path)).unwrap();
+        File::create(format!("{}/2", path)).unwrap();
 
         let segment = DataSgment::load_dir(path);
 
-        assert_eq!(segment.name, "current_db_1");
+        // ignore first file
+        let segment = match segment.get_previous() {
+            None => {
+                assert!(false);
+                return ();
+            }
+            Some(value) => value,
+        };
+
+        assert_eq!(segment.get_position(), 3);
 
         let segment = match segment.get_previous() {
             None => {
@@ -347,7 +382,7 @@ mod tests {
             Some(value) => value,
         };
 
-        assert_eq!(segment.name, "current_db_2");
+        assert_eq!(segment.get_position(), 2);
 
         let segment = match segment.get_previous() {
             None => {
@@ -357,7 +392,7 @@ mod tests {
             Some(value) => value,
         };
 
-        assert_eq!(segment.name, "current_db_3");
+        assert_eq!(segment.get_position(), 1);
 
         remove_dir_all(format!("./{}", path)).unwrap();
     }

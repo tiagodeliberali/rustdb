@@ -1,17 +1,32 @@
 use rand::random;
 use rustdb::{KeyValue, RustDB};
-use std::fs::{read_dir, remove_dir_all};
+use std::fs::{copy, create_dir_all, read_dir, remove_dir_all};
 
 static STORAGE_TEST_FOLDER: &str = "storage_test";
-static STORAGE_TEST_READONLY_FOLDER: &str = "./readonly_storage_test";
 
 static KEY: &str = "ABC";
 static VALUE: &str = "{\"id\":\"ABC\",\"name\":\"Tiago\"}";
 
+fn folder_name() -> String {
+    format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>())
+}
+
+fn copy_read_only_files(path: &str) {
+    create_dir_all(format!("./{}", path)).unwrap();
+
+    copy("./readonly_storage_test/1", format!("./{}/1", path)).unwrap();
+
+    copy("./readonly_storage_test/2", format!("./{}/2", path)).unwrap();
+
+    copy("./readonly_storage_test/3", format!("./{}/3", path)).unwrap();
+}
+
 #[test]
 fn open_existing_segment_and_find_record() {
     // arrange
-    let db = RustDB::load(STORAGE_TEST_READONLY_FOLDER);
+    let path = &folder_name();
+    copy_read_only_files(path);
+    let db = RustDB::load(path);
 
     // act
     let data = db.get_record(String::from("1234"));
@@ -28,12 +43,17 @@ fn open_existing_segment_and_find_record() {
         data.get_value_as_string(),
         "{\"email\":\"tiago@test.com\",\"id\":\"1234\",\"name\":\"Tiago\"}"
     );
+
+    remove_dir_all(format!("./{}", path)).unwrap();
 }
 
 #[test]
 fn load_folder_and_find_all_records() {
     // arrange
-    let db = RustDB::load(STORAGE_TEST_READONLY_FOLDER);
+    let path = &folder_name();
+    copy_read_only_files(path);
+
+    let db = RustDB::load(path);
 
     // act
     let data1 = db.get_record(String::from("1234"));
@@ -63,6 +83,8 @@ fn load_folder_and_find_all_records() {
         data4.unwrap(),
         "{\"email\":\"lucas@test.com\",\"id\":\"1237\",\"name\":\"Lucas\"}",
     );
+
+    remove_dir_all(format!("./{}", path)).unwrap();
 }
 
 fn validate_value(result: Option<KeyValue>, content: &str) {
@@ -71,10 +93,6 @@ fn validate_value(result: Option<KeyValue>, content: &str) {
     } else {
         assert!(false, "result is empty");
     }
-}
-
-fn folder_name() -> String {
-    format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>())
 }
 
 #[test]

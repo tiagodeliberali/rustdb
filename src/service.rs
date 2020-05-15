@@ -65,7 +65,7 @@ impl RustDB {
                 value.save_record(key_value)?;
 
                 if value.get_size() > MAX_SIZE_FILE {
-                    let new_segment = DataSgment::new(&self.folder);
+                    let new_segment = DataSgment::new(&self.folder, &value.get_position() + 1);
                     let current_segment = self.segment.replace(new_segment);
                     self.segment.as_mut().unwrap().set_previous(current_segment);
                 }
