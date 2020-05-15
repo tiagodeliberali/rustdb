@@ -16,6 +16,7 @@ pub struct DataSgment {
     closed: bool,
     previous: Option<Box<DataSgment>>,
     size: u64,
+    name: String,
 }
 
 impl DataSgment {
@@ -53,16 +54,14 @@ impl DataSgment {
     pub fn new(folder: &str) -> DataSgment {
         create_dir_all(format!("./{}", folder)).unwrap();
 
+        let file_name = format!("current_db_{}", random::<u64>());
+
         let database_file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .append(true)
-            .open(Path::new(&format!(
-                "./{}/current_db_{}",
-                folder,
-                random::<u64>()
-            )))
+            .open(Path::new(&format!("./{}/{}", folder, file_name)))
             .unwrap();
 
         let mut buffer = BufReader::new(&database_file);
@@ -74,6 +73,7 @@ impl DataSgment {
             closed: false,
             previous: None,
             size,
+            name: file_name,
         }
     }
 
@@ -95,6 +95,7 @@ impl DataSgment {
             closed: true,
             previous: None,
             size,
+            name: String::from(file_name),
         };
 
         segment.load().unwrap();
@@ -233,9 +234,13 @@ mod tests {
     static STORAGE_TEST_READONLY_FOLDER: &str = "./readonly_storage_test";
     static STORAGE_TEST_FILE: &str = "./readonly_storage_test/integration_current_db";
 
+    fn get_folder_name() -> String {
+        format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>())
+    }
+
     #[test]
     fn create_empty_segment_on_new_db() {
-        let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+        let path = &get_folder_name();
 
         let segment = DataSgment::new(path);
 
@@ -257,7 +262,7 @@ mod tests {
 
     #[test]
     fn update_size_on_save_data() {
-        let path = &format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>());
+        let path = &get_folder_name();
 
         let mut segment = DataSgment::new(path);
         segment
@@ -318,5 +323,42 @@ mod tests {
         assert!(segment.closed);
         assert_eq!(segment.get_size(), 69);
         assert!(segment.get_previous().is_none());
+    }
+
+    #[test]
+    fn load_files_in_order() {
+        let path = &get_folder_name();
+
+        File::create(format!("{}/current_db_3", path)).unwrap();
+
+        File::create(format!("{}/current_db_1", path)).unwrap();
+
+        File::create(format!("{}/current_db_2", path)).unwrap();
+
+        let segment = DataSgment::load_dir(path);
+
+        assert_eq!(segment.name, "current_db_1");
+
+        let segment = match segment.get_previous() {
+            None => {
+                assert!(false);
+                return ();
+            }
+            Some(value) => value,
+        };
+
+        assert_eq!(segment.name, "current_db_2");
+
+        let segment = match segment.get_previous() {
+            None => {
+                assert!(false);
+                return ();
+            }
+            Some(value) => value,
+        };
+
+        assert_eq!(segment.name, "current_db_3");
+
+        remove_dir_all(format!("./{}", path)).unwrap();
     }
 }
