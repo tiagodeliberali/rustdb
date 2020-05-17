@@ -10,6 +10,43 @@ use std::path::Path;
 
 use crate::core::{ByteString, KeyValue};
 
+struct InitialSegmentReference {
+    initial_segment: Option<u64>,
+    folder_name: String,
+}
+
+impl InitialSegmentReference {
+    fn load(folder_name: &str) -> InitialSegmentReference {
+        let initial_segment =
+            match File::open(InitialSegmentReference::initial_segment_file(folder_name)) {
+                Ok(mut f) => {
+                    let name = f.read_u64::<BigEndian>().unwrap();
+                    Some(name)
+                }
+                Err(_) => None,
+            };
+
+        InitialSegmentReference {
+            initial_segment,
+            folder_name: String::from(folder_name),
+        }
+    }
+
+    fn create(self, initial_segment_name: u64) {
+        let mut reference = File::create(Path::new(
+            &InitialSegmentReference::initial_segment_file(&self.folder_name),
+        ))
+        .unwrap();
+        reference
+            .write_u64::<BigEndian>(initial_segment_name)
+            .unwrap();
+    }
+
+    fn initial_segment_file(folder_name: &str) -> String {
+        format!("{}/initial_segment", folder_path(folder_name))
+    }
+}
+
 pub struct DataSgment {
     database_file: File,
     index: HashMap<ByteString, u64>,
@@ -22,17 +59,6 @@ pub struct DataSgment {
 
 fn folder_path(folder_name: &str) -> String {
     format!("./{}", folder_name)
-}
-
-fn initial_segment_file(folder_name: &str) -> String {
-    format!("{}/initial_segment", folder_path(folder_name))
-}
-
-fn read_initial_segment_reference(folder_name: &str) -> Result<u64> {
-    let mut initial_segment = File::open(initial_segment_file(&folder_name))?;
-    let name = initial_segment.read_u64::<BigEndian>().unwrap();
-
-    Ok(name)
 }
 
 fn parse_file_name(name: u64) -> String {
@@ -50,11 +76,6 @@ fn build_path(folder_path: &str, file: &str) -> String {
     format!("{}/{}", folder_path, file)
 }
 
-fn create_initial_segment_reference(folder_path: &str, name: u64) {
-    let mut reference = File::create(Path::new(&initial_segment_file(folder_path))).unwrap();
-    reference.write_u64::<BigEndian>(name).unwrap();
-}
-
 impl DataSgment {
     fn update_next_file(&mut self, name: u64) {
         self.database_file.seek(SeekFrom::Start(8)).unwrap();
@@ -66,11 +87,13 @@ impl DataSgment {
         let folder_path = folder_path(folder);
         create_dir_all(&folder_path).unwrap();
 
-        let mut data_segment_name = match read_initial_segment_reference(folder) {
-            Ok(value) => Some(parse_file_name(value)),
-            Err(_) => {
+        let reference = InitialSegmentReference::load(folder);
+
+        let mut data_segment_name = match reference.initial_segment {
+            Some(value) => Some(parse_file_name(value)),
+            None => {
                 let new_segment = DataSgment::new(folder);
-                create_initial_segment_reference(&folder_path, new_segment.name);
+                reference.create(new_segment.name);
                 return new_segment;
             }
         };
@@ -81,7 +104,7 @@ impl DataSgment {
 
             data_segment_name = match &current.next_segment_name {
                 None => None,
-                Some(v) => Some(format!("{}", v)),
+                Some(v) => Some(v.to_owned()),
             };
 
             loaded_segment = match loaded_segment {
@@ -93,14 +116,14 @@ impl DataSgment {
             };
         }
 
-        let mut current_segment = DataSgment::new(folder);
+        let mut editable_segment = DataSgment::new(folder);
 
         if let Some(mut value) = loaded_segment {
-            value.update_next_file(current_segment.name);
-            current_segment.previous.replace(Box::from(value));
+            value.update_next_file(editable_segment.name);
+            editable_segment.previous.replace(Box::from(value));
         }
 
-        current_segment
+        editable_segment
     }
 
     pub fn new(folder: &str) -> DataSgment {
@@ -448,9 +471,11 @@ mod tests {
         assert!(paths.contains(&parse_file_name(segment.name)));
         assert!(paths.contains(&String::from("initial_segment")));
 
+        let reference = InitialSegmentReference::load(folder_name);
+
         assert_eq!(
             segment.name,
-            read_initial_segment_reference(folder_name).unwrap()
+            reference.initial_segment.unwrap()
         );
 
         remove_dir_all(folder_path(folder_name)).unwrap();
