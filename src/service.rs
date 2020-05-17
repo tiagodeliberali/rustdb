@@ -7,7 +7,7 @@ use crate::store::{DataSgment, InitialSegmentReference};
 static MAX_SIZE_FILE: u64 = 1_000_000;
 
 #[cfg(not(test))]
-static MAX_SIZE_FILE: u64 = 1_000;
+static MAX_SIZE_FILE: u64 = 3_000_000;
 
 pub struct RustDB {
     pub segment: Option<DataSgment>,

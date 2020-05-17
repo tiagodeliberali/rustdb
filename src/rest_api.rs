@@ -1,8 +1,10 @@
-use rustdb::{KeyValue, RustDB};
+use rustdb::{KeyValue, LogCompressor, RustDB};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::net::{TcpListener, TcpStream};
+use std::sync::{Arc, Mutex};
+use std::{thread, time};
 
 const INSERT_DATA: &[u8; 17] = b"POST / HTTP/1.1\r\n";
 const UPDATE_DATA: &[u8; 16] = b"PUT / HTTP/1.1\r\n";
@@ -21,23 +23,44 @@ fn debug(_msg: &str) {
 
 fn main() {
     println!("Loading database...");
-    let mut db = RustDB::load("storage");
+    let db = RustDB::load("storage");
     let listener = match TcpListener::bind("127.0.0.1:7887") {
         Ok(listener) => listener,
         Err(err) => panic!("Failed to bind address\n{}", err),
     };
+    let db = Arc::new(Mutex::new(db));
     println!("Database ready at 7887");
 
-    // for now: single threaded - no concurrency
+    let compress_db = Arc::clone(&db);
+    thread::spawn(move || compress_files(compress_db));
+
     for stream in listener.incoming() {
         match stream {
-            Ok(result) => handle_connection(result, &mut db),
+            Ok(result) => handle_connection(result, Arc::clone(&db)),
             Err(err) => println!("Failed to process current stream\n{}", err),
         };
     }
 }
 
-fn handle_connection(mut stream: TcpStream, db: &mut RustDB) {
+fn compress_files(db: Arc<Mutex<RustDB>>) -> ! {
+    loop {
+        let folder = "storage";
+        let segment_names = db.lock().unwrap().get_closed_segment_names();
+        let current_segment_name = db.lock().unwrap().get_active_segment_name();
+        let compressor = LogCompressor::new(folder, segment_names.clone(), current_segment_name);
+
+        let (active_segment, new_segment) = compressor.compress();
+
+        db.lock()
+            .unwrap()
+            .replace_segments(active_segment, new_segment);
+        LogCompressor::clean(&folder, segment_names);
+
+        thread::sleep(time::Duration::from_secs(10));
+    }
+}
+
+fn handle_connection(mut stream: TcpStream, db: Arc<Mutex<RustDB>>) {
     let mut buffer = [0; 512];
     let size = match stream.read(&mut buffer) {
         Ok(value) => value,
@@ -55,7 +78,7 @@ fn handle_connection(mut stream: TcpStream, db: &mut RustDB) {
 
     for (action_type, action) in build_actions().into_iter() {
         if buffer.starts_with(action_type) {
-            response = action(content, db);
+            response = action(content, &db);
         }
     }
 
@@ -98,7 +121,7 @@ impl Response {
     }
 }
 
-type Callback = fn(&str, &mut RustDB) -> Response;
+type Callback = fn(&str, &Arc<Mutex<RustDB>>) -> Response;
 
 fn build_actions() -> HashMap<&'static [u8], Callback> {
     let mut actions: HashMap<&[u8], Callback> = HashMap::new();
@@ -110,13 +133,13 @@ fn build_actions() -> HashMap<&'static [u8], Callback> {
     actions
 }
 
-fn read_content(content: &str, db: &mut RustDB) -> Response {
+fn read_content(content: &str, db: &Arc<Mutex<RustDB>>) -> Response {
     let key = match get_key(content) {
         Ok(v) => v,
         Err(err) => return Response::new(400, err),
     };
 
-    let (response_code, result) = match db.get_record(key) {
+    let (response_code, result) = match db.lock().unwrap().get_record(key) {
         Ok(key_value) => match key_value {
             Some(kv) => (200, kv.get_value_as_string()),
             None => (204, String::new()),
@@ -127,13 +150,13 @@ fn read_content(content: &str, db: &mut RustDB) -> Response {
     Response::new(response_code, result)
 }
 
-fn delete_content(content: &str, db: &mut RustDB) -> Response {
+fn delete_content(content: &str, db: &Arc<Mutex<RustDB>>) -> Response {
     let key = match get_key(content) {
         Ok(v) => v,
         Err(err) => return Response::new(400, err),
     };
 
-    let (response_code, result) = match db.delete_record(key) {
+    let (response_code, result) = match db.lock().unwrap().delete_record(key) {
         Ok(_) => (200, String::new()),
         Err(err) => (500, err.to_string()),
     };
@@ -141,13 +164,13 @@ fn delete_content(content: &str, db: &mut RustDB) -> Response {
     Response::new(response_code, result)
 }
 
-fn update_content(content: &str, db: &mut RustDB) -> Response {
+fn update_content(content: &str, db: &Arc<Mutex<RustDB>>) -> Response {
     let key_value = match get_keyvalue(content) {
         Ok(v) => v,
         Err(err) => return Response::new(400, err),
     };
 
-    let (response_code, result) = match db.save_record(key_value) {
+    let (response_code, result) = match db.lock().unwrap().save_record(key_value) {
         Ok(_) => (200, String::new()),
         Err(err) => (500, err.to_string()),
     };

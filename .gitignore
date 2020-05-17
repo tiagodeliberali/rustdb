@@ -1,3 +1,4 @@
 /target
-/jmeter
+/jmeter/*
+!/jmeter/test.jmx
 /storage*
