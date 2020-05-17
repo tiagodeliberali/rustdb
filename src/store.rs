@@ -2,7 +2,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use crc::crc32;
 use rand::random;
 use std::collections::HashMap;
-use std::fs::{create_dir_all, File, OpenOptions};
+use std::fs::{create_dir_all, remove_file, File, OpenOptions};
 use std::io::{
     prelude::*, BufReader, Error, ErrorKind, ErrorKind::UnexpectedEof, Result, SeekFrom,
 };
@@ -10,13 +10,13 @@ use std::path::Path;
 
 use crate::core::{ByteString, KeyValue};
 
-struct InitialSegmentReference {
-    initial_segment: Option<u64>,
+pub struct InitialSegmentReference {
+    pub initial_segment: Option<u64>,
     folder_name: String,
 }
 
 impl InitialSegmentReference {
-    fn load(folder_name: &str) -> InitialSegmentReference {
+    pub fn load(folder_name: &str) -> InitialSegmentReference {
         let initial_segment =
             match File::open(InitialSegmentReference::initial_segment_file(folder_name)) {
                 Ok(mut f) => {
@@ -42,6 +42,16 @@ impl InitialSegmentReference {
             .unwrap();
     }
 
+    pub fn update(self, initial_segment_name: u64) {
+        let mut reference = File::create(Path::new(
+            &InitialSegmentReference::initial_segment_file(&self.folder_name),
+        ))
+        .unwrap();
+        reference
+            .write_u64::<BigEndian>(initial_segment_name)
+            .unwrap();
+    }
+
     fn initial_segment_file(folder_name: &str) -> String {
         format!("{}/initial_segment", folder_path(folder_name))
     }
@@ -49,19 +59,19 @@ impl InitialSegmentReference {
 
 pub struct DataSgment {
     database_file: File,
-    index: HashMap<ByteString, u64>,
+    pub index: HashMap<ByteString, u64>,
     closed: bool,
     previous: Option<Box<DataSgment>>,
     size: u64,
-    name: u64,
-    next_segment_name: Option<String>,
+    pub name: u64,
+    pub next_segment_name: Option<String>,
 }
 
 fn folder_path(folder_name: &str) -> String {
     format!("./{}", folder_name)
 }
 
-fn parse_file_name(name: u64) -> String {
+pub fn parse_file_name(name: u64) -> String {
     format!("{:016x}", name)
 }
 
@@ -77,7 +87,7 @@ fn build_path(folder_path: &str, file: &str) -> String {
 }
 
 impl DataSgment {
-    fn update_next_file(&mut self, name: u64) {
+    pub fn update_next_file(&mut self, name: u64) {
         self.database_file.seek(SeekFrom::Start(8)).unwrap();
         self.database_file.write_u64::<BigEndian>(name).unwrap();
         self.next_segment_name.replace(parse_file_name(name));
@@ -319,6 +329,10 @@ impl DataSgment {
     pub fn get_name(&self) -> String {
         parse_file_name(self.name)
     }
+
+    pub fn remove(folder: &str, segment: &str) {
+        remove_file(build_path(&folder_path(folder), segment)).unwrap();
+    }
 }
 
 #[cfg(test)]
@@ -473,10 +487,7 @@ mod tests {
 
         let reference = InitialSegmentReference::load(folder_name);
 
-        assert_eq!(
-            segment.name,
-            reference.initial_segment.unwrap()
-        );
+        assert_eq!(segment.name, reference.initial_segment.unwrap());
 
         remove_dir_all(folder_path(folder_name)).unwrap();
     }
