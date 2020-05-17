@@ -112,7 +112,10 @@ fn compress_and_replace() {
 
     // assert
     assert_eq!(active_segment, db.get_active_segment_name());
-    assert_eq!(new_segment_name, db.segment.unwrap().get_previous().as_ref().unwrap().name);
+    assert_eq!(
+        new_segment_name,
+        db.segment.unwrap().get_previous().as_ref().unwrap().name
+    );
 
     remove_dir_all(path_to_folder(path)).unwrap();
 }

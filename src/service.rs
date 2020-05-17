@@ -118,7 +118,11 @@ impl RustDB {
             current_segment.previous.replace(Box::from(new_segment));
         } else {
             if current_segment.previous.is_some() {
-                RustDB::recursive(current_segment.previous.as_mut().unwrap(), replace_segment, new_segment);
+                RustDB::recursive(
+                    current_segment.previous.as_mut().unwrap(),
+                    replace_segment,
+                    new_segment,
+                );
             }
         }
     }
