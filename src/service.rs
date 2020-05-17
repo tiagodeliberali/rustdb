@@ -65,7 +65,7 @@ impl RustDB {
                 value.save_record(key_value)?;
 
                 if value.get_size() > MAX_SIZE_FILE {
-                    let new_segment = DataSgment::new(&self.folder, &value.get_position() + 1);
+                    let new_segment = DataSgment::new(&self.folder);
                     let current_segment = self.segment.replace(new_segment);
                     self.segment.as_mut().unwrap().set_previous(current_segment);
                 }
@@ -74,5 +74,20 @@ impl RustDB {
         };
 
         Ok(())
+    }
+
+    pub fn get_segment_names(self) -> Vec<String> {
+        let mut result = Vec::new();
+
+        let mut segment = &Some(Box::from(self.segment.unwrap()));
+
+        while let Some(v) = segment {
+            if *v.is_closed() {
+                result.push(v.get_name());
+            }
+            segment = v.get_previous();
+        }
+
+        result
     }
 }
