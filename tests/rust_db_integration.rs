@@ -11,14 +11,28 @@ fn folder_name() -> String {
     format!("{}{}", STORAGE_TEST_FOLDER, random::<u64>())
 }
 
-fn copy_read_only_files(path: &str) {
-    create_dir_all(format!("./{}", path)).unwrap();
-
-    copy("./readonly_storage_test/1", format!("./{}/1", path)).unwrap();
-
-    copy("./readonly_storage_test/2", format!("./{}/2", path)).unwrap();
-
-    copy("./readonly_storage_test/3", format!("./{}/3", path)).unwrap();
+fn copy_read_only_files(folder_name: &str) {
+    create_dir_all(format!("./{}", folder_name)).unwrap();
+    copy(
+        "./readonly_storage_test/53e155bcbdeb560f",
+        format!("./{}/53e155bcbdeb560f", folder_name),
+    )
+    .unwrap();
+    copy(
+        "./readonly_storage_test/4da053f2db81bb26",
+        format!("./{}/4da053f2db81bb26", folder_name),
+    )
+    .unwrap();
+    copy(
+        "./readonly_storage_test/e0c515663f0ea931",
+        format!("./{}/e0c515663f0ea931", folder_name),
+    )
+    .unwrap();
+    copy(
+        "./readonly_storage_test/initial_segment",
+        format!("./{}/initial_segment", folder_name),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -29,7 +43,7 @@ fn open_existing_segment_and_find_record() {
     let db = RustDB::load(path);
 
     // act
-    let data = db.get_record(String::from("1234"));
+    let data = db.get_record(String::from("0001"));
 
     // assert
     assert!(data.is_ok());
@@ -38,10 +52,10 @@ fn open_existing_segment_and_find_record() {
     assert!(data.is_some());
 
     let data = data.unwrap();
-    assert_eq!(data.get_key_as_string(), "1234");
+    assert_eq!(data.get_key_as_string(), "0001");
     assert_eq!(
         data.get_value_as_string(),
-        "{\"email\":\"tiago@test.com\",\"id\":\"1234\",\"name\":\"Tiago\"}"
+        "{\"email\":\"1@test1.com\",\"id\":\"1\",\"name\":\"nome 1\"}"
     );
 
     remove_dir_all(format!("./{}", path)).unwrap();
@@ -56,10 +70,10 @@ fn load_folder_and_find_all_records() {
     let db = RustDB::load(path);
 
     // act
-    let data1 = db.get_record(String::from("1234"));
-    let data2 = db.get_record(String::from("1235"));
-    let data3 = db.get_record(String::from("1236"));
-    let data4 = db.get_record(String::from("1237"));
+    let data1 = db.get_record(String::from("0028"));
+    let data2 = db.get_record(String::from("0015"));
+    let data3 = db.get_record(String::from("0008"));
+    let data4 = db.get_record(String::from("0034"));
 
     // assert
     assert!(data1.is_ok());
@@ -69,19 +83,19 @@ fn load_folder_and_find_all_records() {
 
     validate_value(
         data1.unwrap(),
-        "{\"email\":\"tiago@test.com\",\"id\":\"1234\",\"name\":\"Tiago\"}",
+        "{\"email\":\"28@test1.com\",\"id\":\"28\",\"name\":\"nome 28\"}",
     );
     validate_value(
         data2.unwrap(),
-        "{\"email\":\"glau@test.com\",\"id\":\"1235\",\"name\":\"Glau\"}",
+        "{\"email\":\"15@test1.com\",\"id\":\"15\",\"name\":\"nome 15\"}",
     );
     validate_value(
         data3.unwrap(),
-        "{\"email\":\"alice_novo@test.com\",\"id\":\"1236\",\"name\":\"Alice atualizado\"}",
+        "{\"email\":\"8@test1.com\",\"id\":\"8\",\"name\":\"nome 8\"}",
     );
     validate_value(
         data4.unwrap(),
-        "{\"email\":\"lucas@test.com\",\"id\":\"1237\",\"name\":\"Lucas\"}",
+        "{\"email\":\"34@test1.com\",\"id\":\"34\",\"name\":\"nome 34\"}",
     );
 
     remove_dir_all(format!("./{}", path)).unwrap();
@@ -194,7 +208,7 @@ fn create_multiple_files() {
 
     // assert
     let paths = read_dir(path).unwrap();
-    assert_eq!(13, paths.count());
+    assert_eq!(15, paths.count());
 
     remove_dir_all(format!("./{}", path)).unwrap();
 }
@@ -296,6 +310,26 @@ fn delete_item_that_exists_on_previous_segment() {
     assert!(paths.count() > 1); // check if we have more than on file
 
     assert!(result.is_none());
+
+    remove_dir_all(format!("./{}", path)).unwrap();
+}
+
+#[test]
+fn get_closed_segment_names() {
+    // arrange
+    let path = &folder_name();
+    copy_read_only_files(path);
+    let db = RustDB::load(path);
+
+    // act
+    let data: Vec<String> = db.get_closed_segment_names();
+
+    // assert
+    assert_eq!(data.len(), 3);
+
+    assert_eq!(data.get(0).unwrap(), "4da053f2db81bb26");
+    assert_eq!(data.get(1).unwrap(), "e0c515663f0ea931");
+    assert_eq!(data.get(2).unwrap(), "53e155bcbdeb560f");
 
     remove_dir_all(format!("./{}", path)).unwrap();
 }
