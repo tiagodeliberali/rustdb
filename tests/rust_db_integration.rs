@@ -322,7 +322,7 @@ fn get_closed_segment_names() {
     let db = RustDB::load(path);
 
     // act
-    let data: Vec<String> = db.get_segment_names();
+    let data: Vec<String> = db.get_closed_segment_names();
 
     // assert
     assert_eq!(data.len(), 3);

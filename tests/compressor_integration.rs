@@ -28,7 +28,7 @@ fn compress_closed_files() {
     }
 
     // act
-    let segment_names = db.get_segment_names();
+    let segment_names = db.get_closed_segment_names();
     let current_segment_name = db.segment.unwrap().name;
     let compressor = LogCompressor::new(path, segment_names, current_segment_name);
 
@@ -63,7 +63,7 @@ fn delete_compressed_files() {
     }
 
     // act
-    let segment_names = db.get_segment_names();
+    let segment_names = db.get_closed_segment_names();
     let current_segment_name = db.segment.unwrap().name;
     let compressor = LogCompressor::new(path, segment_names.clone(), current_segment_name);
 
@@ -80,6 +80,39 @@ fn delete_compressed_files() {
     assert_eq!(3, paths.len());
     assert!(paths.contains(&new_segment.get_name()));
     assert!(paths.contains(&String::from("initial_segment")));
+
+    remove_dir_all(path_to_folder(path)).unwrap();
+}
+
+#[test]
+fn compress_and_replace() {
+    // arrange
+    let path = &folder_name();
+    let mut db = RustDB::load(path);
+
+    for i in 0..200 {
+        let id = i % 3;
+        db.save_record(KeyValue::new_from_strings(
+            format!("{:04}", id),
+            format!("{{\"id\":\"{}\", \"name\":\"nome_{}\"}}", id, i),
+        ))
+        .unwrap();
+    }
+
+    // act
+    let segment_names = db.get_closed_segment_names();
+    let current_segment_name = db.get_active_segment_name();
+    let compressor = LogCompressor::new(path, segment_names.clone(), current_segment_name);
+
+    let (active_segment, new_segment) = compressor.compress();
+
+    let new_segment_name = new_segment.name;
+    db.replace_segments(active_segment, new_segment);
+    LogCompressor::clean(&path, segment_names);
+
+    // assert
+    assert_eq!(active_segment, db.get_active_segment_name());
+    assert_eq!(new_segment_name, db.segment.unwrap().get_previous().as_ref().unwrap().name);
 
     remove_dir_all(path_to_folder(path)).unwrap();
 }

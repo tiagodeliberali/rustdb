@@ -83,7 +83,7 @@ impl RustDB {
         Ok(())
     }
 
-    pub fn get_segment_names(&self) -> Vec<String> {
+    pub fn get_closed_segment_names(&self) -> Vec<String> {
         let mut result = Vec::new();
 
         let seg = match &self.segment {
@@ -103,6 +103,24 @@ impl RustDB {
         }
 
         result
+    }
+
+    pub fn get_active_segment_name(&self) -> u64 {
+        self.segment.as_ref().unwrap().name
+    }
+
+    pub fn replace_segments(&mut self, replace_segment: u64, new_segment: DataSgment) {
+        RustDB::recursive(self.segment.as_mut().unwrap(), replace_segment, new_segment);
+    }
+
+    fn recursive(current_segment: &mut DataSgment, replace_segment: u64, new_segment: DataSgment) {
+        if current_segment.name == replace_segment {
+            current_segment.previous.replace(Box::from(new_segment));
+        } else {
+            if current_segment.previous.is_some() {
+                RustDB::recursive(current_segment.previous.as_mut().unwrap(), replace_segment, new_segment);
+            }
+        }
     }
 }
 

@@ -61,7 +61,7 @@ pub struct DataSgment {
     database_file: File,
     pub index: HashMap<ByteString, u64>,
     closed: bool,
-    previous: Option<Box<DataSgment>>,
+    pub previous: Option<Box<DataSgment>>,
     size: u64,
     pub name: u64,
     pub next_segment_name: Option<String>,
