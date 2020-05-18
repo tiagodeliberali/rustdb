@@ -208,7 +208,7 @@ fn create_multiple_files() {
 
     // assert
     let paths = read_dir(path).unwrap();
-    assert_eq!(15, paths.count());
+    assert_eq!(2, paths.count());
 
     remove_dir_all(format!("./{}", path)).unwrap();
 }

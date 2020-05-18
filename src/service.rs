@@ -3,10 +3,6 @@ use std::io::Result;
 use crate::core::KeyValue;
 use crate::store::{DataSgment, InitialSegmentReference};
 
-#[cfg(test)]
-static MAX_SIZE_FILE: u64 = 1_000_000;
-
-#[cfg(not(test))]
 static MAX_SIZE_FILE: u64 = 3_000_000;
 
 pub struct RustDB {
