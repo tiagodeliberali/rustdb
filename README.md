@@ -1,6 +1,8 @@
 # rustdb
 Experimental db written in rust, based on example of [Chapter 7](https://livebook.manning.com/book/rust-in-action/chapter-7/) of the book Rust in Action.
 
+Separate the log file into segments and added a log compressor running in a separate thread.
+
 ## Usage
 For now, it exposes a rest api accepting json as input.
 
