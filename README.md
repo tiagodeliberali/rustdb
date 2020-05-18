@@ -1,4 +1,4 @@
-# rustdb
+# RustDB
 Experimental db written in rust, based on example of [Chapter 7](https://livebook.manning.com/book/rust-in-action/chapter-7/) of the book Rust in Action.
 
 Also, added ideas from Chapter 3 of the book [Designing Data-Intensive Applications](https://www.amazon.com.br/Designing-Data-Intensive-Applications-Reliable-Maintainable-ebook/dp/B06XPJML5D/ref=sr_1_1?__mk_pt_BR=%C3%85M%C3%85%C5%BD%C3%95%C3%91&crid=18FFFVLEM7FEH&keywords=design+data+intensive+applications&qid=1589769724&sprefix=design+data%2Caps%2C299&sr=8-1).
@@ -40,6 +40,25 @@ And you can request data with a GET request:
 {&quot;email&quot;:&quot;lucas@test.com&quot;,&quot;id&quot;:&quot;1237&quot;,&quot;name&quot;:&quot;Lucas&quot;}<span style="background-color:#A1B0B8"><font color="#263238"><b>%</b></font></span>  </pre>
 
 When you start the server, it creates a separate thread to compress log. It will garantee that database files will occupy the lowest possible number of log files that represents all data. This process runs each 5 seconds and will create and delete log files from storage folder.
+
+# Understand db's structure
+
+RustDB is a simple key/value storage with single collection and persisted data. The keys are kept in memory in a hash map. The value is stored in log files splited into data segments. Each time you request a key/value, it gets the file position from the hash map and load the value to return it.
+
+The log file contains, for each register:
+ - Checksum
+ - key lenght
+ - value length
+ - key data
+ - value data
+
+By this way, we can garantee that the database will not delivery corrputed data. The data segments are filled in a append only way, allwing very fast inserts. When you update an registry, it creates a new entry in the end of the log file and the hash map value index is updated in memory.
+
+Due to the nature of writes, log files grows fast with lots of old versions of each key. We break each file in 3MB chuncks in a struct called DataSegment. Besides of the record strucuture, each data segment log file contains its name in the first 8 bytes and a reference to the next segment in the following 8 bytes.
+
+The storage directory contains a file called `initial_segment` that contains 8 bytes poiting to the first data segment. The name is a u64 value and is parsed into a {:016x} hex value to express the file names.
+
+To deal with the always growing log files, we have a struct called `LogCompressor` that takes a list of segments and recreates a db without duplications. By this way, we can remove the old segments and change reference on `initial_segment` file. In thre rest_api implementation, we run this compression funciton each 5 seconds.
 
 ## Tests
 RustDB has just few acceptance tests covering DataSegments, LogCompression and basic database opreations. All tests are executed using I/O, creating and deleting storage folders.
