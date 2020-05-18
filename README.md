@@ -56,7 +56,7 @@ By this way, we can garantee that the database will not delivery corrputed data.
 
 Due to the nature of writes, log files grows fast with lots of old versions of each key. We break each file in 3MB chuncks in a struct called DataSegment. Besides of the record strucuture, each data segment log file contains its name in the first 8 bytes and a reference to the next segment in the following 8 bytes.
 
-The storage directory contains a file called `initial_segment` that contains 8 bytes poiting to the first data segment. The name is a u64 value and is parsed into a {:016x} hex value to express the file names.
+The storage directory contains a file called `initial_segment` that contains 8 bytes poiting to the first data segment. The name is a u64 value and is parsed into a `{:016x}` hex value to express the file names.
 
 To deal with the always growing log files, we have a struct called `LogCompressor` that takes a list of segments and recreates a db without duplications. By this way, we can remove the old segments and change reference on `initial_segment` file. In thre rest_api implementation, we run this compression funciton each 5 seconds.
 
